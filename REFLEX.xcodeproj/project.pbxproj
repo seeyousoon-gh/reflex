@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000031 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000011 /* AppDelegate.swift */; };
+		AA000032 /* GameViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000012 /* GameViewController.swift */; };
+		AA000033 /* GameScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000013 /* GameScene.swift */; };
+		AA000034 /* PaddleNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000014 /* PaddleNode.swift */; };
+		AA000035 /* BallNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000015 /* BallNode.swift */; };
+		AA000036 /* BrickNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000016 /* BrickNode.swift */; };
+		AA000037 /* MandalaNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000017 /* MandalaNode.swift */; };
+		AA000038 /* MirrorEffectNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000018 /* MirrorEffectNode.swift */; };
+		AA000039 /* AudioSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000019 /* AudioSystem.swift */; };
+		AA00003A /* ComboSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001A /* ComboSystem.swift */; };
+		AA00003B /* BrickGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001B /* BrickGrid.swift */; };
+		AA00003C /* MirrorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001C /* MirrorState.swift */; };
+		AA00003D /* HUDNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001D /* HUDNode.swift */; };
+		AA00003E /* GameConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001E /* GameConfig.swift */; };
+		AA00003F /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000020 /* Extensions.swift */; };
+		AA000040 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000021 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA000006 /* REFLEX.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = REFLEX.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AA000012 /* GameViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameViewController.swift; sourceTree = "<group>"; };
+		AA000013 /* GameScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameScene.swift; sourceTree = "<group>"; };
+		AA000014 /* PaddleNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaddleNode.swift; sourceTree = "<group>"; };
+		AA000015 /* BallNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallNode.swift; sourceTree = "<group>"; };
+		AA000016 /* BrickNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrickNode.swift; sourceTree = "<group>"; };
+		AA000017 /* MandalaNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MandalaNode.swift; sourceTree = "<group>"; };
+		AA000018 /* MirrorEffectNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorEffectNode.swift; sourceTree = "<group>"; };
+		AA000019 /* AudioSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSystem.swift; sourceTree = "<group>"; };
+		AA00001A /* ComboSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComboSystem.swift; sourceTree = "<group>"; };
+		AA00001B /* BrickGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrickGrid.swift; sourceTree = "<group>"; };
+		AA00001C /* MirrorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MirrorState.swift; sourceTree = "<group>"; };
+		AA00001D /* HUDNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDNode.swift; sourceTree = "<group>"; };
+		AA00001E /* GameConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameConfig.swift; sourceTree = "<group>"; };
+		AA000020 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		AA000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA00001F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA000041 /* REFLEX */ = {
+			isa = PBXGroup;
+			children = (
+				AA000042 /* Sources */,
+				AA000048 /* Assets */,
+				AA00001F /* Info.plist */,
+				AA000049 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA000049 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA000006 /* REFLEX.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AA000042 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				AA000011 /* AppDelegate.swift */,
+				AA000012 /* GameViewController.swift */,
+				AA000020 /* Extensions.swift */,
+				AA000043 /* Scenes */,
+				AA000044 /* Nodes */,
+				AA000045 /* Systems */,
+				AA000046 /* HUD */,
+				AA000047 /* Config */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		AA000043 /* Scenes */ = {
+			isa = PBXGroup;
+			children = (
+				AA000013 /* GameScene.swift */,
+			);
+			path = Scenes;
+			sourceTree = "<group>";
+		};
+		AA000044 /* Nodes */ = {
+			isa = PBXGroup;
+			children = (
+				AA000014 /* PaddleNode.swift */,
+				AA000015 /* BallNode.swift */,
+				AA000016 /* BrickNode.swift */,
+				AA000017 /* MandalaNode.swift */,
+				AA000018 /* MirrorEffectNode.swift */,
+			);
+			path = Nodes;
+			sourceTree = "<group>";
+		};
+		AA000045 /* Systems */ = {
+			isa = PBXGroup;
+			children = (
+				AA000019 /* AudioSystem.swift */,
+				AA00001A /* ComboSystem.swift */,
+				AA00001B /* BrickGrid.swift */,
+				AA00001C /* MirrorState.swift */,
+			);
+			path = Systems;
+			sourceTree = "<group>";
+		};
+		AA000046 /* HUD */ = {
+			isa = PBXGroup;
+			children = (
+				AA00001D /* HUDNode.swift */,
+			);
+			path = HUD;
+			sourceTree = "<group>";
+		};
+		AA000047 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				AA00001E /* GameConfig.swift */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		AA000048 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				AA000021 /* Assets.xcassets */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA000002 /* REFLEX */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000A /* Build configuration list for PBXNativeTarget "REFLEX" */;
+			buildPhases = (
+				AA000003 /* Sources */,
+				AA000004 /* Resources */,
+				AA000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = REFLEX;
+			productName = REFLEX;
+			productReference = AA000006 /* REFLEX.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					AA000002 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AA000009 /* Build configuration list for PBXProject "REFLEX" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA000041;
+			productRefGroup = AA000049 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA000002 /* REFLEX */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000040 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000031 /* AppDelegate.swift in Sources */,
+				AA000032 /* GameViewController.swift in Sources */,
+				AA000033 /* GameScene.swift in Sources */,
+				AA000034 /* PaddleNode.swift in Sources */,
+				AA000035 /* BallNode.swift in Sources */,
+				AA000036 /* BrickNode.swift in Sources */,
+				AA000037 /* MandalaNode.swift in Sources */,
+				AA000038 /* MirrorEffectNode.swift in Sources */,
+				AA000039 /* AudioSystem.swift in Sources */,
+				AA00003A /* ComboSystem.swift in Sources */,
+				AA00003B /* BrickGrid.swift in Sources */,
+				AA00003C /* MirrorState.swift in Sources */,
+				AA00003D /* HUDNode.swift in Sources */,
+				AA00003E /* GameConfig.swift in Sources */,
+				AA00003F /* Extensions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reflex.game;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
+				OTHER_LDFLAGS = "-framework SpriteKit -framework AVFoundation -framework UIKit";
+			};
+			name = Debug;
+		};
+		AA000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.reflex.game;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA00000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AA00000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA000009 /* Build configuration list for PBXProject "REFLEX" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000B /* Debug */,
+				AA00000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000A /* Build configuration list for PBXNativeTarget "REFLEX" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA000007 /* Debug */,
+				AA000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = AA000001 /* Project object */;
+}
