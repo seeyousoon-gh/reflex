@@ -30,6 +30,7 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
+            -derivedDataPath ./DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build \
@@ -37,7 +38,7 @@ jobs:
             grep --line-buffered -E \
               "(error:|warning:|Build succeeded|Build FAILED|❌|✅|note:)" || true
 
-      - name: Confirm result
+      - name: Confirm build result
         run: |
           if grep -q "BUILD FAILED" /tmp/build.log; then
             echo "❌ BUILD FAILED — errors:"
@@ -46,6 +47,58 @@ jobs:
           else
             echo "✅ Build succeeded"
           fi
+
+      - name: Upload to Appetize.io
+        # Runs only when APPETIZE_API_TOKEN secret is configured
+        if: ${{ secrets.APPETIZE_API_TOKEN != '' }}
+        env:
+          APPETIZE_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        run: |
+          APP_PATH="./DerivedData/Build/Products/Debug-iphonesimulator/REFLEX.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ .app not found at expected path"
+            find ./DerivedData -name "REFLEX.app" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "📦 Zipping $APP_PATH"
+          cd "$(dirname "$APP_PATH")"
+          zip -r REFLEX.app.zip REFLEX.app
+
+          echo "⬆️  Uploading to Appetize.io..."
+          RESPONSE=$(curl -s --http1.1 https://api.appetize.io/v1/apps \
+            -F "file=@REFLEX.app.zip" \
+            -F "platform=ios" \
+            -F "note=REFLEX Layer 1 — $(git -C $GITHUB_WORKSPACE rev-parse --short HEAD)" \
+            -u "${APPETIZE_TOKEN}:")
+
+          echo "API response: $RESPONSE"
+
+          PUBLIC_KEY=$(echo "$RESPONSE" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d.get('publicKey','ERROR'))")
+
+          if [ "$PUBLIC_KEY" = "ERROR" ] || [ -z "$PUBLIC_KEY" ]; then
+            echo "❌ Upload failed — check your APPETIZE_API_TOKEN secret"
+            exit 1
+          fi
+
+          PLAY_URL="https://appetize.io/app/${PUBLIC_KEY}?device=iphone14pro&osVersion=16&scale=75&autoplay=true"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎮  Play REFLEX on your iPhone:"
+          echo "    $PLAY_URL"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Also write to job summary so it shows on Actions tab
+          echo "## 🎮 Play REFLEX" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**[Tap here to open in browser →]($PLAY_URL)**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Open this link on your iPhone. Works in Safari." >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`$(git -C $GITHUB_WORKSPACE rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Public key | \`${PUBLIC_KEY}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload build log on failure
         if: failure()
