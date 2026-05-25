@@ -28,6 +28,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      - name: Inject commit SHA for cache busting
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          sed -i "s/BUILD_SHA/${SHA}/g" index.html
+          echo "Cache-bust token: ${SHA}"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
