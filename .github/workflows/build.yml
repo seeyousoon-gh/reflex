@@ -1,0 +1,55 @@
+name: Build REFLEX
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: iOS Simulator Build
+    runs-on: macos-14        # Xcode 15 on Apple Silicon
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build (simulator, no signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project REFLEX.xcodeproj \
+            -scheme REFLEX \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build \
+            2>&1 | tee /tmp/build.log | \
+            grep --line-buffered -E \
+              "(error:|warning:|Build succeeded|Build FAILED|❌|✅|note:)" || true
+
+      - name: Confirm result
+        run: |
+          if grep -q "BUILD FAILED" /tmp/build.log; then
+            echo "❌ BUILD FAILED — errors:"
+            grep "error:" /tmp/build.log | head -40
+            exit 1
+          else
+            echo "✅ Build succeeded"
+          fi
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/build.log
