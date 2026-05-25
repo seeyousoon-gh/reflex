@@ -14,11 +14,14 @@ export class GameScene extends Phaser.Scene {
     this.W = this.scale.width;
     this.H = this.scale.height;
 
-    // Game state
-    this.resonance  = 3;
-    this.combo      = 0;
-    this.score      = 0;
-    this.targetPPS  = Cfg.speedAwakening;   // current speed in px/second
+    this.resonance = 3;
+    this.combo     = 0;
+    this.score     = 0;
+    this.targetPPS = Cfg.speedAwakening;
+
+    // Paddle velocity tracking — used for swipe-spin on bounce
+    this._prevPaddleX  = this.W / 2;
+    this._paddleVelPPF = 0;   // pixels-per-frame
 
     this._buildBackground();
     this._buildWalls();
@@ -38,25 +41,21 @@ export class GameScene extends Phaser.Scene {
 
   _buildWalls() {
     const { W, H } = this;
-    const T = 60;   // wall thickness (extends off-screen)
+    const T = 60;
     const o = { isStatic: true, restitution: 1, friction: 0, frictionAir: 0, label: 'wall' };
 
-    this.matter.add.rectangle(W / 2,      -T / 2,    W,  T, o);   // top
-    this.matter.add.rectangle(-T / 2,     H / 2,     T,  H, o);   // left
-    this.matter.add.rectangle(W + T / 2,  H / 2,     T,  H, o);   // right
-    // No bottom wall — miss handled in update()
+    this.matter.add.rectangle(W / 2,     -T / 2,   W, T, o);   // top
+    this.matter.add.rectangle(-T / 2,     H / 2,   T, H, o);   // left
+    this.matter.add.rectangle(W + T / 2,  H / 2,   T, H, o);   // right
   }
 
   _buildPaddle() {
-    const { W, H } = this;
-    this.paddleY  = H * Cfg.paddleYFrac;
-    this.paddle   = new Paddle(this, W / 2, this.paddleY);
+    this.paddleY = this.H * Cfg.paddleYFrac;
+    this.paddle  = new Paddle(this, this.W / 2, this.paddleY);
   }
 
   _buildBall() {
-    this.ballRestY = this.paddleY
-                   - Cfg.paddleHeight / 2
-                   - Cfg.ballRadius - 4;
+    this.ballRestY = this.paddleY - Cfg.paddleHeight / 2 - Cfg.ballRadius - 4;
     this.ball = new Ball(this, this.W / 2, this.ballRestY);
   }
 
@@ -64,18 +63,18 @@ export class GameScene extends Phaser.Scene {
     this.hintText = this.add.text(
       this.W / 2, this.ballRestY - 40,
       'tap to launch',
-      { fontFamily: 'Georgia, serif', fontSize: '14px', color: '#C9A84C', alpha: 0.6 }
+      { fontFamily: 'Georgia, serif', fontSize: '14px', color: '#C9A84C' }
     ).setOrigin(0.5).setDepth(8).setAlpha(0.6);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Input
+  //  Input — absolute X tracking
+  //  Paddle centre snaps directly to finger X anywhere on screen.
+  //  Small finger movements = full paddle travel. No 1:1 drag needed.
   // ─────────────────────────────────────────────────────────────────────────
   _setupInput() {
-    let lastX = this.W / 2;
-
     this.input.on('pointerdown', (p) => {
-      lastX = p.x;
+      this.paddle.moveTo(p.x, this.W);
       if (!this.ball.launched) {
         this._launchBall();
       }
@@ -83,9 +82,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointermove', (p) => {
       if (!p.isDown) return;
-      const dx = p.x - lastX;
-      lastX = p.x;
-      this.paddle.moveTo(this.paddle.x + dx, this.W);
+      this.paddle.moveTo(p.x, this.W);
       if (!this.ball.launched) {
         this.ball.setPosition(this.paddle.x, this.ballRestY);
         this.hintText.setX(this.paddle.x);
@@ -95,17 +92,10 @@ export class GameScene extends Phaser.Scene {
 
   _launchBall() {
     this.hintText.setVisible(false);
-
-    // Random angle between 50° and 130° from positive-x axis
-    const angleDeg = Phaser.Math.Between(50, 130);
-    const angleRad = Phaser.Math.DegToRad(angleDeg);
-    const spd      = this.targetPPS / 60;          // px/second → px/frame
-
-    // Phaser y-axis goes downward, so upward = negative y
-    this.ball.launch(
-      Math.cos(angleRad) * spd,
-      -Math.sin(angleRad) * spd
-    );
+    const deg = Phaser.Math.Between(50, 130);
+    const rad = Phaser.Math.DegToRad(deg);
+    const spd = this.targetPPS / 60;
+    this.ball.launch(Math.cos(rad) * spd, -Math.sin(rad) * spd);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -117,13 +107,9 @@ export class GameScene extends Phaser.Scene {
         const la = pair.bodyA.label;
         const lb = pair.bodyB.label;
 
-        if ((la === 'ball' || lb === 'ball') && (la === 'wall' || lb === 'wall')) {
-          this.ball.jitter(1);
-
-        } else if ((la === 'ball' || lb === 'ball') && (la === 'paddle' || lb === 'paddle')) {
-          this._onPaddleBounce();
-
-        } else if ((la === 'ball' || lb === 'ball') && (la === 'brick' || lb === 'brick')) {
+        if ((la === 'ball' || lb === 'ball') && (la === 'wall'   || lb === 'wall'))   { this.ball.jitter(1); }
+        if ((la === 'ball' || lb === 'ball') && (la === 'paddle' || lb === 'paddle')) { this._onPaddleBounce(); }
+        if ((la === 'ball' || lb === 'ball') && (la === 'brick'  || lb === 'brick'))  {
           const brickBody = la === 'brick' ? pair.bodyA : pair.bodyB;
           this._onBrickHit(brickBody);
         }
@@ -131,23 +117,48 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Paddle bounce — zone angle + swipe spin
+  //
+  //  Zone angle: hit position maps directly to output angle.
+  //    left edge  → 90 + steeringRange  degrees (upper-left)
+  //    centre     → 90°                  (straight up)
+  //    right edge → 90 - steeringRange  degrees (upper-right)
+  //
+  //  Swipe spin: paddle velocity at contact adds ±swipeMaxDeg on top.
+  //  Moving paddle left while hitting nudges ball further left, and vice versa.
+  // ─────────────────────────────────────────────────────────────────────────
   _onPaddleBounce() {
-    const relX  = (this.ball.x - this.paddle.x) / (Cfg.paddleWidth / 2);
-    const bias  = Phaser.Math.Clamp(relX, -1, 1) * 25 * Math.PI / 180;
-    const v     = this.ball.body.velocity;
-    const speed = Math.hypot(v.x, v.y);
-    const angle = Math.atan2(v.y, v.x) + bias;
+    // Where on the paddle did the ball land? (-1 = far left, +1 = far right)
+    const relX = Phaser.Math.Clamp(
+      (this.ball.x - this.paddle.x) / (Cfg.paddleWidth / 2), -1, 1
+    );
 
-    // abs(sin) guarantees ball exits paddle moving upward
+    // Base angle from hit position
+    const baseDeg = 90 + relX * Cfg.paddleSteeringRange;
+
+    // Swipe component: how fast is the paddle moving right now?
+    const swipeNorm  = Phaser.Math.Clamp(this._paddleVelPPF / Cfg.paddleSwipeNormPPF, -1, 1);
+    const swipeDeg   = swipeNorm * Cfg.paddleSwipeMaxDeg;
+
+    // Combine and clamp to a playable range (never nearly horizontal)
+    const finalDeg = Phaser.Math.Clamp(baseDeg + swipeDeg, 18, 162);
+    const finalRad = Phaser.Math.DegToRad(finalDeg);
+
+    const speed = Math.hypot(this.ball.body.velocity.x, this.ball.body.velocity.y)
+                  || (this.targetPPS / 60);
+
+    // cos(angle) → horizontal, -sin(angle) → upward (Phaser y-axis inverted)
     MB().setVelocity(this.ball.body, {
-      x:  Math.cos(angle) * speed,
-      y: -Math.abs(Math.sin(angle)) * speed,
+      x:  Math.cos(finalRad) * speed,
+      y: -Math.sin(finalRad) * speed,   // always negative = always upward
     });
-    this.ball.jitter(1.5);
+
+    // Tiny jitter only — steering is intentional now
+    this.ball.jitter(0.5);
   }
 
   _onBrickHit(brickBody) {
-    // Full brick logic in Layer 2 — for now just remove it
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
     this.ball.jitter(3);
@@ -158,21 +169,22 @@ export class GameScene extends Phaser.Scene {
   //  Game loop
   // ─────────────────────────────────────────────────────────────────────────
   update() {
-    this.ball.sync();   // keep graphic on top of physics body
+    // Track paddle velocity (px/frame) for swipe-spin effect
+    this._paddleVelPPF = this.paddle.x - this._prevPaddleX;
+    this._prevPaddleX  = this.paddle.x;
+
+    this.ball.sync();
 
     if (!this.ball.launched) {
-      // Ball rides on paddle before launch
       this.ball.setPosition(this.paddle.x, this.ballRestY);
       return;
     }
 
-    // Miss — ball fell below bottom of screen
     if (this.ball.y > this.H + 60) {
       this._handleMiss();
       return;
     }
 
-    // Normalise speed every frame (Matter.js drifts ~1-2% over time)
     this.ball.normalizeSpeed(this.targetPPS / 60);
   }
 
@@ -182,7 +194,6 @@ export class GameScene extends Phaser.Scene {
   _incrementCombo() {
     this.combo++;
     this.score += 100;
-    // Milestone hooks wired in Layer 3
   }
 
   _handleMiss() {
@@ -194,7 +205,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Reset ball to rest on paddle
     this.ball.reset(this.paddle.x, this.ballRestY);
     this.hintText.setPosition(this.paddle.x, this.ballRestY - 40).setVisible(true);
   }
@@ -202,20 +212,13 @@ export class GameScene extends Phaser.Scene {
   _gameOver() {
     this.ball.reset(this.W / 2, this.ballRestY);
 
-    // Layer 7 will flesh this out with full fade + "Return." text
-    this.add.text(this.W / 2, this.H / 2, 'Return.', {
+    const txt = this.add.text(this.W / 2, this.H / 2, 'Return.', {
       fontFamily: 'Georgia, serif',
       fontSize:   '36px',
       color:      '#F0ECD8',
     }).setOrigin(0.5).setDepth(20).setAlpha(0);
 
-    this.tweens.add({
-      targets:  this.children.getAll().slice(-1),
-      alpha:    1,
-      duration: 1500,
-      ease:     'Sine.easeIn',
-    });
-
+    this.tweens.add({ targets: txt, alpha: 1, duration: 1500, ease: 'Sine.easeIn' });
     this.time.delayedCall(3000, () => this.scene.restart());
   }
 }
