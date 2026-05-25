@@ -189,9 +189,11 @@ export class GameScene extends Phaser.Scene {
     const relX       = Phaser.Math.Clamp((contactX - this.paddle.x) / halfW, -1, 1);
     const effectiveRX = Math.abs(relX) > 0.85 ? Math.sign(relX) : relX;
 
-    const baseDeg  = 90 + effectiveRX * Cfg.paddleSteeringRange;
+    // left=-1 → 150°, centre=0 → 90°, right=+1 → 30°
+    const baseDeg   = 90 - effectiveRX * Cfg.paddleSteeringRange;
+    // swipe right (positive vel) → nudge angle down toward 30° (rightward)
     const swipeNorm = Phaser.Math.Clamp(this._paddleVelPPF / Cfg.paddleSwipeNormPPF, -1, 1);
-    const finalDeg  = Phaser.Math.Clamp(baseDeg + swipeNorm * Cfg.paddleSwipeMaxDeg, 18, 162);
+    const finalDeg  = Phaser.Math.Clamp(baseDeg - swipeNorm * Cfg.paddleSwipeMaxDeg, 18, 162);
     const finalRad  = Phaser.Math.DegToRad(finalDeg);
 
     MB().setVelocity(this.ball.body, {
