@@ -161,11 +161,13 @@ export class GameScene extends Phaser.Scene {
     const overlapRight = (px + halfW) - (bx - r);   // depth from right
     const minHoriz     = Math.min(overlapLeft, overlapRight);
 
-    if (overlapTop <= minHoriz) {
-      // Top-face hit — snap above paddle, apply zone + swipe bounce
+    if (overlapTop <= minHoriz && vel.y > 0) {
+      // Top-face hit — only when ball is moving downward.
+      // vel.y > 0 guard prevents re-triggering after bounce while the ball
+      // is still geometrically close to the paddle surface.
       MB().setPosition(this.ball.body, { x: bx, y: py - halfH - r - 1 });
       this._applyTopFaceBounce(bx);
-    } else {
+    } else if (overlapTop > minHoriz) {
       // Side hit — push out toward whichever side has less penetration
       const minSpeed = (this.targetPPS / 60) * 0.5;
       if (overlapLeft <= overlapRight) {
@@ -176,6 +178,8 @@ export class GameScene extends Phaser.Scene {
         MB().setVelocity(this.ball.body, { x:  Math.max(Math.abs(vel.x), minSpeed), y: vel.y });
       }
     }
+    // overlapTop <= minHoriz && vel.y <= 0: ball already bounced upward,
+    // still in the zone geometrically — do nothing, let it clear.
   }
 
   // ─────────────────────────────────────────────────────────────────────────
