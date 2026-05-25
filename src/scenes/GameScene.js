@@ -65,13 +65,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Input — absolute X tracking
-  //  Paddle centre snaps directly to finger X anywhere on screen.
-  //  Small finger movements = full paddle travel. No 1:1 drag needed.
+  //  Input — relative delta tracking with sensitivity multiplier
+  //
+  //  Drag from ANYWHERE on screen. Finger only needs to travel
+  //  (paddle_range / sensitivity) pixels to sweep the full paddle width.
+  //  At 2.5x: ~44px finger movement = full 110px paddle travel.
+  //  Screen-size-independent: same physical thumb movement on any iPhone.
   // ─────────────────────────────────────────────────────────────────────────
   _setupInput() {
+    let lastX = 0;
+
     this.input.on('pointerdown', (p) => {
-      this.paddle.moveTo(p.x, this.W);
+      lastX = p.x;
       if (!this.ball.launched) {
         this._launchBall();
       }
@@ -79,7 +84,9 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointermove', (p) => {
       if (!p.isDown) return;
-      this.paddle.moveTo(p.x, this.W);
+      const dx = (p.x - lastX) * Cfg.paddleSensitivity;
+      lastX = p.x;
+      this.paddle.moveTo(this.paddle.x + dx, this.W);
       if (!this.ball.launched) {
         this.ball.setPosition(this.paddle.x, this.ballRestY);
         this.hintText.setX(this.paddle.x);

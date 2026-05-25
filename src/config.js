@@ -21,6 +21,12 @@ export const Cfg = {
   paddleHeight:  12,
   paddleYFrac:  0.88,         // fraction of screen height from top
 
+  // Sensitivity: multiplier on raw finger delta.
+  // 1.0 = 1:1 (finger must travel full paddle range)
+  // 2.0 = finger travels half the distance to move paddle the full range
+  // 2.5 = a ~44px swipe covers the full 110px paddle width
+  paddleSensitivity: 2.5,
+
   // Angle steering — hit position maps output angle (degrees from positive-x)
   // left edge → steeringMax°, center → 90°, right edge → (180-steeringMax)°
   paddleSteeringRange: 60,    // degrees each side of vertical (90°)
