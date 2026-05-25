@@ -19,12 +19,9 @@ export class GameScene extends Phaser.Scene {
     this.score     = 0;
     this.targetPPS = Cfg.speedAwakening;
 
-    // Rolling paddle velocity — last 4 frames averaged.
-    // A rolling window prevents a single fast frame from dominating
-    // the swipe-spin angle on contact.
-    this._prevPaddleX    = this.W / 2;
-    this._paddleVelPPF   = 0;
-    this._paddleVelBuf   = [0, 0, 0, 0];
+    this._prevPaddleX  = this.W / 2;
+    this._paddleVelPPF = 0;
+    this._paddleVelBuf = [0, 0, 0, 0];
 
     this._buildBackground();
     this._buildWalls();
@@ -44,8 +41,6 @@ export class GameScene extends Phaser.Scene {
 
   _buildWalls() {
     // Walls handled manually in _resolveWalls() — no physics bodies needed.
-    // Matter.js collisionstart fires before velocity resolution so jitter
-    // applied to a pre-collision velocity pointed at the wall causes trapping.
   }
 
   _buildPaddle() {
@@ -67,7 +62,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Input — relative delta with sensitivity multiplier
+  //  Input
   // ─────────────────────────────────────────────────────────────────────────
   _setupInput() {
     let lastX = 0;
@@ -98,24 +93,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Collisions
+  //  Collisions — only bricks; paddle is handled manually
   // ─────────────────────────────────────────────────────────────────────────
   _setupCollisions() {
     this.matter.world.on('collisionstart', (event) => {
       for (const pair of event.pairs) {
         const la = pair.bodyA.label;
         const lb = pair.bodyB.label;
-
-        if ((la === 'ball' || lb === 'ball') && (la === 'paddle' || lb === 'paddle')) {
-          // Use the actual Matter.js contact point(s) for accurate hit position.
-          // pair.collision.supports holds world-space contact coordinates — more
-          // reliable than ball.x when the paddle is moving at contact time.
-          const supports = pair.collision.supports;
-          const contactX = supports && supports.length > 0
-            ? supports.reduce((s, p) => s + p.x, 0) / supports.length
-            : this.ball.x;
-          this._onPaddleBounce(contactX);
-        }
 
         if ((la === 'ball' || lb === 'ball') && (la === 'brick' || lb === 'brick')) {
           const brickBody = la === 'brick' ? pair.bodyA : pair.bodyB;
@@ -126,7 +110,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Wall reflections — manual, every frame
+  //  Manual wall reflections
   // ─────────────────────────────────────────────────────────────────────────
   _resolveWalls() {
     const r   = Cfg.ballRadius;
@@ -135,9 +119,9 @@ export class GameScene extends Phaser.Scene {
     let px = this.ball.x, py = this.ball.y;
     let hit = false;
 
-    if (py - r <= 0 && vy < 0)      { vy = Math.abs(vy);  py = r + 1;         hit = true; } // ceiling
-    if (px - r <= 0 && vx < 0)      { vx = Math.abs(vx);  px = r + 1;         hit = true; } // left
-    if (px + r >= this.W && vx > 0) { vx = -Math.abs(vx); px = this.W - r - 1; hit = true; } // right
+    if (py - r <= 0 && vy < 0)      { vy = Math.abs(vy);  py = r + 1;          hit = true; }
+    if (px - r <= 0 && vx < 0)      { vx = Math.abs(vx);  px = r + 1;          hit = true; }
+    if (px + r >= this.W && vx > 0) { vx = -Math.abs(vx); px = this.W - r - 1; hit = true; }
 
     if (hit) {
       MB().setPosition(this.ball.body, { x: px, y: py });
@@ -147,63 +131,70 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Paddle bounce — contact-point hit detection + zone angle + swipe spin
+  //  Manual paddle collision — runs every frame, immune to tunnelling
   //
-  //  Three distinct cases:
+  //  Uses previous-frame ball position to distinguish:
+  //    • Top-face hit: ball was above paddle top last frame, now overlapping
+  //    • Side hit: ball was already below paddle top — deflect sideways
   //
-  //  1. TOP FACE hit (ball came from above):
-  //     Zone angle maps contact position to output angle:
-  //       left edge → 150°, centre → 90°, right edge → 30°
-  //     Corner zone (|relX| > 0.85): snap to maximum angle so clipping
-  //     the edge always gives a consistent, readable result.
-  //     Swipe spin adds ±paddleSwipeMaxDeg based on paddle velocity.
-  //
-  //  2. SIDE hit (ball centre is level with or below paddle top):
-  //     Treat like a wall — flip vx, preserve vy. Ball deflects sideways.
-  //     Happens when the paddle slides into a slow-moving ball from the side.
-  //
-  //  Velocity is always set explicitly — we never rely on Matter.js to
-  //  compute the impulse (collisionstart fires pre-resolution anyway).
+  //  No Matter.js body on the paddle means no embedded-body freeze loop.
   // ─────────────────────────────────────────────────────────────────────────
-  _onPaddleBounce(contactX) {
-    const paddleTopY = this.paddleY - Cfg.paddleHeight / 2;
-    const vel        = this.ball.body.velocity;
-    const speed      = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
+  _resolvePaddle() {
+    if (!this.ball.launched) return;
 
-    // ── Side hit ─────────────────────────────────────────────────────────
-    // Ball centre is at or below the paddle's top face → hit from the side.
-    if (this.ball.y >= paddleTopY - Cfg.ballRadius * 0.5) {
-      // Deflect away from whichever side of the paddle was hit
-      const goingRight = this.ball.x > this.paddle.x;
+    const r     = Cfg.ballRadius;
+    const halfW = Cfg.paddleWidth  / 2;
+    const halfH = Cfg.paddleHeight / 2;
+    const px    = this.paddle.x;
+    const py    = this.paddleY;
+    const bx    = this.ball.x;
+    const by    = this.ball.y;
+    const vel   = this.ball.body.velocity;
+
+    // Quick AABB reject
+    if (bx + r < px - halfW || bx - r > px + halfW) return;
+    if (by + r < py - halfH || by - r > py + halfH) return;
+
+    // Overlap confirmed — determine entry face via previous position
+    const prevBy    = by - vel.y;
+    const paddleTop = py - halfH;
+
+    if (prevBy + r <= paddleTop) {
+      // Ball was above paddle top last frame → top-face hit
+      MB().setPosition(this.ball.body, { x: bx, y: paddleTop - r - 1 });
+      this._applyTopFaceBounce(bx);
+    } else {
+      // Side hit — push out to nearest horizontal side
+      const goRight  = bx >= px;
+      const minSpeed = (this.targetPPS / 60) * 0.5;
+      const outX     = goRight ? px + halfW + r + 1 : px - halfW - r - 1;
+      MB().setPosition(this.ball.body, { x: outX, y: by });
       MB().setVelocity(this.ball.body, {
-        x: goingRight ? Math.abs(vel.x) : -Math.abs(vel.x),
+        x: goRight ? Math.max(Math.abs(vel.x), minSpeed) : -Math.max(Math.abs(vel.x), minSpeed),
         y: vel.y,
       });
-      return;
     }
+  }
 
-    // ── Top face hit ─────────────────────────────────────────────────────
-    const halfW = Cfg.paddleWidth / 2;
-    const relX  = Phaser.Math.Clamp((contactX - this.paddle.x) / halfW, -1, 1);
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Top-face bounce — zone angle + swipe spin (same logic as before)
+  // ─────────────────────────────────────────────────────────────────────────
+  _applyTopFaceBounce(contactX) {
+    const vel   = this.ball.body.velocity;
+    const speed = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
 
-    // Corner zone: snap relX to ±1 so the angle is deterministic,
-    // not somewhere randomly between centre and edge.
-    const isCorner    = Math.abs(relX) > 0.85;
-    const effectiveRX = isCorner ? Math.sign(relX) : relX;
+    const halfW      = Cfg.paddleWidth / 2;
+    const relX       = Phaser.Math.Clamp((contactX - this.paddle.x) / halfW, -1, 1);
+    const effectiveRX = Math.abs(relX) > 0.85 ? Math.sign(relX) : relX;
 
-    // Zone base angle: left=-1 → 150°, centre=0 → 90°, right=+1 → 30°
-    const baseDeg = 90 + effectiveRX * Cfg.paddleSteeringRange;
-
-    // Swipe spin from rolling paddle velocity average
+    const baseDeg  = 90 + effectiveRX * Cfg.paddleSteeringRange;
     const swipeNorm = Phaser.Math.Clamp(this._paddleVelPPF / Cfg.paddleSwipeNormPPF, -1, 1);
-    const swipeDeg  = swipeNorm * Cfg.paddleSwipeMaxDeg;
-
-    const finalDeg = Phaser.Math.Clamp(baseDeg + swipeDeg, 18, 162);
-    const finalRad = Phaser.Math.DegToRad(finalDeg);
+    const finalDeg  = Phaser.Math.Clamp(baseDeg + swipeNorm * Cfg.paddleSwipeMaxDeg, 18, 162);
+    const finalRad  = Phaser.Math.DegToRad(finalDeg);
 
     MB().setVelocity(this.ball.body, {
       x:  Math.cos(finalRad) * speed,
-      y: -Math.sin(finalRad) * speed,   // always upward
+      y: -Math.sin(finalRad) * speed,
     });
 
     this.ball.jitter(0.5);
@@ -220,9 +211,6 @@ export class GameScene extends Phaser.Scene {
   //  Game loop
   // ─────────────────────────────────────────────────────────────────────────
   update() {
-    // Rolling paddle velocity average over last 4 frames.
-    // Smooths out single-frame spikes so swipe spin reflects
-    // sustained movement, not accidental jitter.
     const frameVel = this.paddle.x - this._prevPaddleX;
     this._paddleVelBuf.push(frameVel);
     this._paddleVelBuf.shift();
@@ -241,6 +229,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this._resolvePaddle();
     this._resolveWalls();
     this.ball.normalizeSpeed(this.targetPPS / 60);
   }
