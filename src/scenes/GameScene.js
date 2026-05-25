@@ -40,13 +40,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   _buildWalls() {
-    const { W, H } = this;
-    const T = 60;
-    const o = { isStatic: true, restitution: 1, friction: 0, frictionAir: 0, label: 'wall' };
-
-    this.matter.add.rectangle(W / 2,     -T / 2,   W, T, o);   // top
-    this.matter.add.rectangle(-T / 2,     H / 2,   T, H, o);   // left
-    this.matter.add.rectangle(W + T / 2,  H / 2,   T, H, o);   // right
+    // Walls are handled manually in _resolveWalls() — no physics bodies.
+    // Matter.js static bodies cause "stuck on ceiling" because collisionstart
+    // fires before velocity is resolved; jitter on pre-collision velocity
+    // can push the ball deeper into the wall body.
   }
 
   _buildPaddle() {
@@ -107,7 +104,6 @@ export class GameScene extends Phaser.Scene {
         const la = pair.bodyA.label;
         const lb = pair.bodyB.label;
 
-        if ((la === 'ball' || lb === 'ball') && (la === 'wall'   || lb === 'wall'))   { this.ball.jitter(1); }
         if ((la === 'ball' || lb === 'ball') && (la === 'paddle' || lb === 'paddle')) { this._onPaddleBounce(); }
         if ((la === 'ball' || lb === 'ball') && (la === 'brick'  || lb === 'brick'))  {
           const brickBody = la === 'brick' ? pair.bodyA : pair.bodyB;
@@ -115,6 +111,43 @@ export class GameScene extends Phaser.Scene {
         }
       }
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Manual wall reflections
+  //  Called every frame. Reflects velocity when ball reaches a boundary
+  //  and nudges the ball back inside — no physics bodies needed.
+  //  The directional guard (vel.y < 0 for ceiling, etc.) prevents the ball
+  //  from getting trapped in a reflection loop if it's already moving away.
+  // ─────────────────────────────────────────────────────────────────────────
+  _resolveWalls() {
+    const r   = Cfg.ballRadius;
+    const vel = this.ball.body.velocity;
+    let vx = vel.x, vy = vel.y;
+    let px = this.ball.x, py = this.ball.y;
+    let hit = false;
+
+    if (py - r <= 0 && vy < 0) {          // ceiling
+      vy = Math.abs(vy);
+      py = r + 1;
+      hit = true;
+    }
+    if (px - r <= 0 && vx < 0) {          // left wall
+      vx = Math.abs(vx);
+      px = r + 1;
+      hit = true;
+    }
+    if (px + r >= this.W && vx > 0) {     // right wall
+      vx = -Math.abs(vx);
+      px = this.W - r - 1;
+      hit = true;
+    }
+
+    if (hit) {
+      MB().setPosition(this.ball.body, { x: px, y: py });
+      MB().setVelocity(this.ball.body, { x: vx, y: vy });
+      this.ball.jitter(1);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -185,6 +218,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this._resolveWalls();
     this.ball.normalizeSpeed(this.targetPPS / 60);
   }
 
