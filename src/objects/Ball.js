@@ -7,12 +7,12 @@ export class Ball {
     this.scene = scene;
     this.launched = false;
 
-    // Physics body — restitution=1, zero damping for perfect bounce
+    // Sensor body — Matter.js detects overlaps and fires collisionstart,
+    // but applies zero impulse. All velocity changes are manual so there
+    // is nothing for the engine to fight.
     this.body = scene.matter.add.circle(x, y, Cfg.ballRadius, {
-      restitution:    1.0,
-      friction:       0,
+      isSensor:       true,
       frictionAir:    0,
-      frictionStatic: 0,
       inertia:        Infinity,
       inverseInertia: 0,
       label:          'ball',

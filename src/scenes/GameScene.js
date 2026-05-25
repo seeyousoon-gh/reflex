@@ -103,7 +103,7 @@ export class GameScene extends Phaser.Scene {
 
         if ((la === 'ball' || lb === 'ball') && (la === 'brick' || lb === 'brick')) {
           const brickBody = la === 'brick' ? pair.bodyA : pair.bodyB;
-          this._onBrickHit(brickBody);
+          this._onBrickHit(brickBody, pair);
         }
       }
     });
@@ -131,13 +131,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Manual paddle collision — runs every frame, immune to tunnelling
+  //  Manual paddle collision — runs every frame, immune to tunnelling.
   //
-  //  Uses previous-frame ball position to distinguish:
-  //    • Top-face hit: ball was above paddle top last frame, now overlapping
-  //    • Side hit: ball was already below paddle top — deflect sideways
+  //  Entry face is determined by SAT (shortest penetration axis):
+  //    • Top-face: vertical overlap < horizontal overlap → bounce upward
+  //    • Side: horizontal overlap smaller → deflect sideways
   //
-  //  No Matter.js body on the paddle means no embedded-body freeze loop.
+  //  No Matter.js body on paddle, ball is a sensor → nothing to fight.
   // ─────────────────────────────────────────────────────────────────────────
   _resolvePaddle() {
     if (!this.ball.launched) return;
@@ -151,28 +151,30 @@ export class GameScene extends Phaser.Scene {
     const by    = this.ball.y;
     const vel   = this.ball.body.velocity;
 
-    // Quick AABB reject
+    // AABB reject
     if (bx + r < px - halfW || bx - r > px + halfW) return;
     if (by + r < py - halfH || by - r > py + halfH) return;
 
-    // Overlap confirmed — determine entry face via previous position
-    const prevBy    = by - vel.y;
-    const paddleTop = py - halfH;
+    // SAT: penetration depth on each axis — smallest axis = entry face
+    const overlapTop   = (by + r) - (py - halfH);   // depth from above
+    const overlapLeft  = (bx + r) - (px - halfW);   // depth from left
+    const overlapRight = (px + halfW) - (bx - r);   // depth from right
+    const minHoriz     = Math.min(overlapLeft, overlapRight);
 
-    if (prevBy + r <= paddleTop) {
-      // Ball was above paddle top last frame → top-face hit
-      MB().setPosition(this.ball.body, { x: bx, y: paddleTop - r - 1 });
+    if (overlapTop <= minHoriz) {
+      // Top-face hit — snap above paddle, apply zone + swipe bounce
+      MB().setPosition(this.ball.body, { x: bx, y: py - halfH - r - 1 });
       this._applyTopFaceBounce(bx);
     } else {
-      // Side hit — push out to nearest horizontal side
-      const goRight  = bx >= px;
+      // Side hit — push out toward whichever side has less penetration
       const minSpeed = (this.targetPPS / 60) * 0.5;
-      const outX     = goRight ? px + halfW + r + 1 : px - halfW - r - 1;
-      MB().setPosition(this.ball.body, { x: outX, y: by });
-      MB().setVelocity(this.ball.body, {
-        x: goRight ? Math.max(Math.abs(vel.x), minSpeed) : -Math.max(Math.abs(vel.x), minSpeed),
-        y: vel.y,
-      });
+      if (overlapLeft <= overlapRight) {
+        MB().setPosition(this.ball.body, { x: px - halfW - r - 1, y: by });
+        MB().setVelocity(this.ball.body, { x: -Math.max(Math.abs(vel.x), minSpeed), y: vel.y });
+      } else {
+        MB().setPosition(this.ball.body, { x: px + halfW + r + 1, y: by });
+        MB().setVelocity(this.ball.body, { x:  Math.max(Math.abs(vel.x), minSpeed), y: vel.y });
+      }
     }
   }
 
@@ -200,10 +202,28 @@ export class GameScene extends Phaser.Scene {
     this.ball.jitter(0.5);
   }
 
-  _onBrickHit(brickBody) {
+  _onBrickHit(brickBody, pair) {
+    if (brickBody._destroyed) return;   // guard against duplicate events same frame
+    brickBody._destroyed = true;
+
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
-    this.ball.jitter(3);
+
+    // Reflect ball off brick using the collision normal (ball is a sensor so
+    // Matter.js applies no impulse — we own all velocity changes).
+    const vel = this.ball.body.velocity;
+    let { x: nx, y: ny } = pair.collision.normal;
+    // Ensure normal points away from brick surface toward ball
+    if (vel.x * nx + vel.y * ny > 0) { nx = -nx; ny = -ny; }
+    const dot   = vel.x * nx + vel.y * ny;
+    const speed = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
+    let rvx = vel.x - 2 * dot * nx;
+    let rvy = vel.y - 2 * dot * ny;
+    const rs = Math.hypot(rvx, rvy);
+    if (rs > 0.01) { rvx = rvx / rs * speed; rvy = rvy / rs * speed; }
+    MB().setVelocity(this.ball.body, { x: rvx, y: rvy });
+
+    this.ball.jitter(2);
     this._incrementCombo();
   }
 
