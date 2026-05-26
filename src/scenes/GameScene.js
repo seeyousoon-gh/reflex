@@ -1,6 +1,7 @@
 import { Cfg }    from '../config.js';
 import { Ball }   from '../objects/Ball.js';
 import { Paddle } from '../objects/Paddle.js';
+import { Bricks } from '../objects/Bricks.js';
 
 const MB = () => Phaser.Physics.Matter.Matter.Body;
 
@@ -27,6 +28,7 @@ export class GameScene extends Phaser.Scene {
     this._buildWalls();
     this._buildPaddle();
     this._buildBall();
+    this._buildBricks();
     this._buildHintText();
     this._setupInput();
     this._setupCollisions();
@@ -51,6 +53,10 @@ export class GameScene extends Phaser.Scene {
   _buildBall() {
     this.ballRestY = this.paddleY - Cfg.paddleHeight / 2 - Cfg.ballRadius - 4;
     this.ball = new Ball(this, this.W / 2, this.ballRestY);
+  }
+
+  _buildBricks() {
+    this.bricks = new Bricks(this);
   }
 
   _buildHintText() {
@@ -209,17 +215,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   _onBrickHit(brickBody, pair) {
-    if (brickBody._destroyed) return;   // guard against duplicate events same frame
-    brickBody._destroyed = true;
+    if (brickBody._destroyed) return;
 
+    if (brickBody._indestructible) {
+      // Core: reflect ball but never destroy
+      this._reflectBall(pair, 1);
+      return;
+    }
+
+    brickBody._destroyed = true;
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
 
-    // Reflect ball off brick using the collision normal (ball is a sensor so
-    // Matter.js applies no impulse — we own all velocity changes).
+    this._reflectBall(pair, 2);
+    this._incrementCombo();
+
+    if (this.bricks) {
+      this.bricks.remaining--;
+      if (this.bricks.remaining <= 0) this._handleLevelClear();
+    }
+  }
+
+  // Specular reflection using the collision normal from Matter.js.
+  // Ball is a sensor so we own every velocity change — no engine impulse applied.
+  _reflectBall(pair, jitterDeg) {
     const vel = this.ball.body.velocity;
     let { x: nx, y: ny } = pair.collision.normal;
-    // Ensure normal points away from brick surface toward ball
+    // Ensure normal points away from surface toward ball
     if (vel.x * nx + vel.y * ny > 0) { nx = -nx; ny = -ny; }
     const dot   = vel.x * nx + vel.y * ny;
     const speed = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
@@ -228,9 +250,7 @@ export class GameScene extends Phaser.Scene {
     const rs = Math.hypot(rvx, rvy);
     if (rs > 0.01) { rvx = rvx / rs * speed; rvy = rvy / rs * speed; }
     MB().setVelocity(this.ball.body, { x: rvx, y: rvy });
-
-    this.ball.jitter(2);
-    this._incrementCombo();
+    if (jitterDeg > 0) this.ball.jitter(jitterDeg);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -279,6 +299,17 @@ export class GameScene extends Phaser.Scene {
 
     this.ball.reset(this.paddle.x, this.ballRestY);
     this.hintText.setPosition(this.paddle.x, this.ballRestY - 40).setVisible(true);
+  }
+
+  _handleLevelClear() {
+    const txt = this.add.text(this.W / 2, this.H / 2, 'Ascend.', {
+      fontFamily: 'Georgia, serif',
+      fontSize:   '36px',
+      color:      '#C9A84C',
+    }).setOrigin(0.5).setDepth(20).setAlpha(0);
+
+    this.tweens.add({ targets: txt, alpha: 1, duration: 1500, ease: 'Sine.easeIn' });
+    this.time.delayedCall(3500, () => this.scene.restart());
   }
 
   _gameOver() {
