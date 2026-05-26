@@ -29,6 +29,7 @@ export class GameScene extends Phaser.Scene {
     this._buildPaddle();
     this._buildBall();
     this._buildBricks();
+    this._buildHUD();
     this._buildHintText();
     this._setupInput();
     this._setupCollisions();
@@ -57,6 +58,62 @@ export class GameScene extends Phaser.Scene {
 
   _buildBricks() {
     this.bricks = new Bricks(this);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  HUD — resonance orbs · combo · score
+  // ─────────────────────────────────────────────────────────────────────────
+  _buildHUD() {
+    const y = 28;
+
+    // Three resonance orbs, centred at top
+    this._resGfx = this.add.graphics().setDepth(10);
+    this._drawResOrbs();
+
+    // Combo (top-left, hidden until combo > 1)
+    this._comboTxt = this.add.text(20, y, '', {
+      fontFamily: 'Georgia, serif', fontSize: '13px', color: '#C9A84C',
+    }).setOrigin(0, 0.5).setDepth(10).setAlpha(0.75);
+
+    // Score (top-right)
+    this._scoreTxt = this.add.text(this.W - 20, y, '0', {
+      fontFamily: 'Georgia, serif', fontSize: '13px', color: '#F0ECD8',
+    }).setOrigin(1, 0.5).setDepth(10).setAlpha(0.45);
+  }
+
+  _drawResOrbs() {
+    this._resGfx.clear();
+    const y = 28;
+    for (let i = 0; i < 3; i++) {
+      const x     = this.W / 2 + (i - 1) * 18;
+      const alive = i < this.resonance;
+      this._resGfx.fillStyle(alive ? Cfg.primaryGold : 0x1e1a2e, alive ? 0.9 : 0.5);
+      this._resGfx.fillCircle(x, y, 4);
+      if (alive) {
+        this._resGfx.lineStyle(1, Cfg.ivory, 0.35);
+        this._resGfx.strokeCircle(x, y, 4);
+      }
+    }
+  }
+
+  // Brief centred phase-name flash — fades in, holds, fades out.
+  _flashPhase(name) {
+    const txt = this.add.text(this.W / 2, this.H * 0.54, name, {
+      fontFamily: 'Georgia, serif', fontSize: '17px', color: '#C9A84C',
+    }).setOrigin(0.5).setDepth(15).setAlpha(0);
+
+    this.tweens.add({
+      targets: txt, alpha: 0.8, duration: 300, ease: 'Sine.easeOut',
+      onComplete: () => this.tweens.add({
+        targets: txt, alpha: 0, delay: 800, duration: 500, ease: 'Sine.easeIn',
+        onComplete: () => txt.destroy(),
+      }),
+    });
+  }
+
+  _updateHUD() {
+    this._comboTxt.setText(this.combo > 1 ? `× ${this.combo}` : '');
+    this._scoreTxt.setText(`${this.score}`);
   }
 
   _buildHintText() {
@@ -285,12 +342,22 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────
   _incrementCombo() {
     this.combo++;
-    this.score += 100;
+    this.score += 100 * Math.ceil(this.combo / Cfg.comboStem2);
+
+    // Speed escalates at milestones; stays at the new tier until scene restart.
+    if      (this.combo === Cfg.comboStem2)  { this.targetPPS = Cfg.speedRecognition;   this._flashPhase('Recognition');  }
+    else if (this.combo === Cfg.comboStem3)  { this.targetPPS = Cfg.speedDeepening;     this._flashPhase('Deepening');    }
+    else if (this.combo === Cfg.comboStem4)  {                                           this._flashPhase('Transcendence');}
+    else if (this.combo === Cfg.comboMirror) { this.targetPPS = Cfg.speedTranscendence; this._flashPhase('Mirror State'); }
+
+    this._updateHUD();
   }
 
   _handleMiss() {
     this.combo = 0;
     this.resonance--;
+    this._drawResOrbs();
+    this._updateHUD();
 
     if (this.resonance <= 0) {
       this._gameOver();
