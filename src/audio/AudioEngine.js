@@ -19,6 +19,7 @@ export class AudioEngine {
     this._arpTimer    = null;
     this._arpNext     = 0;
     this._arpIdx      = 0;
+    this._nextNoteAt  = 0;    // AudioContext time of next available note slot
   }
 
   // Call inside a user-gesture handler (pointerdown) to unlock iOS audio.
@@ -100,15 +101,24 @@ export class AudioEngine {
 
   // ── Per-event sounds ────────────────────────────────────────────────────────
 
-  // ring 0=outer 1=middle 2=inner, noteIdx 0-4, waveType for oscillator
+  // ring 0=outer 1=middle 2=inner, noteIdx 0-4, waveType for oscillator.
+  // Rapid-fire hits are spaced 65 ms apart so bursts strum rather than smash.
   brickNote(ring, noteIdx, waveType = 'sine') {
     const ctx  = this._get();
-    const freq = SCALES[ring][noteIdx % 5];
     const now  = ctx.currentTime;
+
+    // Advance the note slot; reset to now when the queue has caught up
+    this._nextNoteAt = Math.max(this._nextNoteAt, now);
+    // Drop the note if the queue is already 300 ms deep — burst is over
+    if (this._nextNoteAt - now > 0.3) return;
+    const t = this._nextNoteAt;
+    this._nextNoteAt += 0.065;
+
+    const freq = SCALES[ring][noteIdx % 5];
     const dur  = [1.0, 1.4, 2.0][ring];
     const vol  = [0.34, 0.28, 0.22][ring];
-    this._tone(freq, waveType, vol, now, dur);
-    if (ring === 0) this._tone(freq * 2, waveType, vol * 0.10, now, dur * 0.5);
+    this._tone(freq, waveType, vol, t, dur);
+    if (ring === 0) this._tone(freq * 2, waveType, vol * 0.10, t, dur * 0.5);
   }
 
   paddleTick() {
