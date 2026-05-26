@@ -34,9 +34,11 @@ export const Cfg = {
   paddleSwipeNormPPF:  12,    // px/frame that counts as "full" swipe
 
   // ── Brick rings ───────────────────────────────────────────────────────────
-  outerCount:  24,
-  middleCount: 20,
-  innerCount:  12,
+  melodyCount:   16,
+  outerCount:    24,
+  middleCount:   20,
+  innerCount:    12,
+  melodyRadFrac: 0.78,
   outerRadFrac:  0.60,
   middleRadFrac: 0.40,
   innerRadFrac:  0.22,

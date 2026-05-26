@@ -1,12 +1,17 @@
-// D minor pentatonic: D F G A C, three octaves
-const SCALES = [
-  [587.33, 698.46, 784.00, 880.00, 1046.50],  // outer  D5 F5 G5 A5 C6
-  [293.66, 349.23, 392.00, 440.00,  523.25],  // middle D4 F4 G4 A4 C5
-  [146.83, 174.61, 196.00, 220.00,  261.63],  // inner  D3 F3 G3 A3 C4
+// Gymnopédie No. 1 (Satie) — D major: D E F# G A B C#
+// Arpeggio plays the opening melodic phrase in the mid register.
+// Base phrase (8 notes): E4 D4 B3 A3 D4 C#4 B3 A3
+const GYMNOPEDIE_ARP = [
+  329.63, 293.66, 246.94, 220.00,
+  293.66, 277.18, 246.94, 220.00,
 ];
-
-const ARP_BASE  = [293.66, 349.23, 392.00, 440.00];                   // D4 F4 G4 A4
-const ARP_BLOOM = [293.66, 349.23, 392.00, 440.00, 523.25, 587.33];   // + C5 D5
+// Bloom phrase (16 notes): adds ascending second half
+const GYMNOPEDIE_ARP_BLOOM = [
+  329.63, 293.66, 246.94, 220.00,
+  293.66, 277.18, 246.94, 220.00,
+  329.63, 369.99, 392.00, 440.00,
+  493.88, 440.00, 392.00, 369.99,
+];
 
 export class AudioEngine {
   constructor() {
@@ -19,7 +24,8 @@ export class AudioEngine {
     this._arpTimer    = null;
     this._arpNext     = 0;
     this._arpIdx      = 0;
-    this._nextNoteAt  = 0;    // AudioContext time of next available note slot
+    this._arpInterval = 0.75;  // seconds per note (~40 bpm, Gymnopédie tempo)
+    this._nextNoteAt  = 0;     // AudioContext time of next available brick-note slot
   }
 
   // Call inside a user-gesture handler (pointerdown) to unlock iOS audio.
@@ -27,11 +33,11 @@ export class AudioEngine {
     if (this._ctx.state === 'suspended') this._ctx.resume();
   }
 
-  // Call when ball launches — fades in the base drone over 4 s.
+  // Call when ball launches — fades in D2+A2 open-fifth drone over 4 s.
   startAmbient() {
     if (this._drone.length) return;
     const ctx = this._ctx;
-    [[73.42, 0.18], [146.83, 0.10]].forEach(([freq, vol]) => {
+    [[73.42, 0.16], [110.00, 0.10]].forEach(([freq, vol]) => {  // D2, A2
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -45,7 +51,7 @@ export class AudioEngine {
     });
   }
 
-  // level: 1=Recognition (rhythm pulse), 2=Deepening (arpeggio), 3=Transcendence (bloom)
+  // level: 1=Recognition (rhythm), 2=Deepening (Gymnopédie arp), 3=Transcendence (bloom)
   unlockStem(level) {
     if (level <= this._stemLevel) return;
     this._stemLevel = level;
@@ -54,29 +60,30 @@ export class AudioEngine {
       this._rhythmNext = ctx.currentTime + 0.5;
       this._scheduleRhythm();
     } else if (level === 2) {
-      this._arpNext = ctx.currentTime + 0.25;
+      this._arpNext = ctx.currentTime + 0.5;
       this._scheduleArp();
     } else if (level === 3) {
-      // Brighten drone slightly when bloom unlocks
       this._drone.forEach(d => {
-        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.4, ctx.currentTime + 2.0);
+        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.5, ctx.currentTime + 2.0);
       });
     }
   }
 
   startMirror() {
-    this._mirror = true;
+    this._mirror      = true;
+    this._arpInterval = 0.375;  // double tempo
     const ctx = this._ctx;
     this._drone.forEach(d => {
       d.osc.frequency.linearRampToValueAtTime(d.baseFreq * 2, ctx.currentTime + 1.0);
-      d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.8, ctx.currentTime + 1.0);
+      d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.9, ctx.currentTime + 1.0);
     });
   }
 
   endMirror() {
-    this._mirror = false;
-    const ctx = this._ctx;
-    const bright = this._stemLevel >= 3 ? 1.4 : 1.0;
+    this._mirror      = false;
+    this._arpInterval = 0.75;
+    const ctx   = this._ctx;
+    const bright = this._stemLevel >= 3 ? 1.5 : 1.0;
     this._drone.forEach(d => {
       d.osc.frequency.linearRampToValueAtTime(d.baseFreq, ctx.currentTime + 1.5);
       d.gain.gain.linearRampToValueAtTime(d.baseVol * bright, ctx.currentTime + 1.5);
@@ -101,48 +108,47 @@ export class AudioEngine {
 
   // ── Per-event sounds ────────────────────────────────────────────────────────
 
-  // ring 0=outer 1=middle 2=inner, noteIdx 0-4, waveType for oscillator.
+  // freq: exact Hz. ringIdx: 0=melody-outer 1=outer 2=middle 3=inner.
   // Rapid-fire hits are spaced 65 ms apart so bursts strum rather than smash.
-  brickNote(ring, noteIdx, waveType = 'sine') {
-    const ctx  = this._get();
-    const now  = ctx.currentTime;
+  brickNote(freq, waveType = 'sine', ringIdx = 1) {
+    const ctx = this._get();
+    const now = ctx.currentTime;
 
-    // Advance the note slot; reset to now when the queue has caught up
     this._nextNoteAt = Math.max(this._nextNoteAt, now);
-    // Drop the note if the queue is already 300 ms deep — burst is over
     if (this._nextNoteAt - now > 0.3) return;
     const t = this._nextNoteAt;
     this._nextNoteAt += 0.065;
 
-    const freq = SCALES[ring][noteIdx % 5];
-    const dur  = [1.0, 1.4, 2.0][ring];
-    const vol  = [0.34, 0.28, 0.22][ring];
+    const dur = [1.2, 1.0, 1.4, 2.0][ringIdx] ?? 1.0;
+    const vol = [0.42, 0.34, 0.28, 0.22][ringIdx] ?? 0.30;
     this._tone(freq, waveType, vol, t, dur);
-    if (ring === 0) this._tone(freq * 2, waveType, vol * 0.10, t, dur * 0.5);
+    // Octave shimmer on melody ring and outer ring
+    if (ringIdx <= 1) this._tone(freq * 2, waveType, vol * 0.08, t, dur * 0.5);
   }
 
   paddleTick() {
     const ctx = this._get();
-    this._tone(220, 'sine', 0.05, ctx.currentTime, 0.07);
+    this._tone(293.66, 'sine', 0.04, ctx.currentTime, 0.07);  // D4 — softer tick
   }
 
   corePing() {
     const ctx = this._get();
     const now = ctx.currentTime;
-    this._tone(73.42,  'sine', 0.35, now,        2.5);
-    this._tone(146.83, 'sine', 0.12, now,        1.5);
+    this._tone(73.42,  'sine', 0.35, now,  2.5);   // D2 deep resonance
+    this._tone(146.83, 'sine', 0.12, now,  1.5);   // D3 overtone
   }
 
   missTone() {
     const ctx = this._get();
     const now = ctx.currentTime;
-    this._tone(293.66, 'sine', 0.18, now,        0.30);
-    this._tone(246.94, 'sine', 0.12, now + 0.10, 0.45);
+    this._tone(293.66, 'sine', 0.18, now,        0.35);  // D4
+    this._tone(246.94, 'sine', 0.12, now + 0.12, 0.50);  // B3 — step down
   }
 
   clearArpeggio() {
     const ctx = this._get();
-    [293.66, 392.00, 440.00, 587.33, 784.00].forEach((f, i) => {
+    // D major ascending: D4 F#4 A4 D5 F#5
+    [293.66, 369.99, 440.00, 587.33, 739.99].forEach((f, i) => {
       this._tone(f, 'sine', 0.28, ctx.currentTime + i * 0.11, 0.9);
     });
   }
@@ -150,8 +156,8 @@ export class AudioEngine {
   gameOverTone() {
     const ctx = this._get();
     const now = ctx.currentTime;
-    this._tone(146.83, 'sine', 0.28, now,       3.0);
-    this._tone(130.81, 'sine', 0.14, now + 0.2, 2.5);
+    this._tone(146.83, 'sine', 0.28, now,       3.0);   // D3
+    this._tone(110.00, 'sine', 0.14, now + 0.2, 2.5);   // A2 — descent
   }
 
   // ── Schedulers — lookahead pattern for accurate timing ─────────────────────
@@ -160,21 +166,20 @@ export class AudioEngine {
     const ctx      = this._ctx;
     const interval = this._mirror ? 0.25 : 0.5;
     while (this._rhythmNext < ctx.currentTime + 0.3) {
-      this._tone(220, 'sine', 0.03, this._rhythmNext, 0.06);
+      this._tone(293.66, 'sine', 0.025, this._rhythmNext, 0.07);  // D4 soft pulse
       this._rhythmNext += interval;
     }
     this._rhythmTimer = setTimeout(() => this._scheduleRhythm(), 100);
   }
 
   _scheduleArp() {
-    const ctx      = this._ctx;
-    const notes    = this._stemLevel >= 3 ? ARP_BLOOM : ARP_BASE;
-    const interval = this._mirror ? 0.25 : 0.5;
+    const ctx   = this._ctx;
+    const notes = this._stemLevel >= 3 ? GYMNOPEDIE_ARP_BLOOM : GYMNOPEDIE_ARP;
     while (this._arpNext < ctx.currentTime + 0.3) {
       const freq = notes[this._arpIdx % notes.length];
-      this._tone(freq, 'triangle', 0.07, this._arpNext, 0.35);
+      this._tone(freq, 'triangle', 0.07, this._arpNext, 0.55);
       this._arpIdx++;
-      this._arpNext += interval;
+      this._arpNext += this._arpInterval;
     }
     this._arpTimer = setTimeout(() => this._scheduleArp(), 100);
   }

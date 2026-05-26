@@ -293,7 +293,7 @@ export class GameScene extends Phaser.Scene {
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
 
-    this.audio.brickNote(brickBody._ringIndex, brickBody._noteIndex, brickBody._waveType);
+    this.audio.brickNote(brickBody._freq, brickBody._waveType, brickBody._ringIndex);
     // Reflect only once per physics step — simultaneous collisions would cancel each other.
     if (!this._reflectedThisStep) {
       this._reflectBall(pair, 2);
