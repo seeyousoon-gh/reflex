@@ -10,14 +10,11 @@ const SCALES = [
 
 export class AudioEngine {
   constructor() {
-    this._ctx = null;
+    this._ctx = new (window.AudioContext || window.webkitAudioContext)();
   }
 
   // Call inside a user-gesture handler (pointerdown) to unlock iOS audio.
   unlock() {
-    if (!this._ctx) {
-      this._ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
     if (this._ctx.state === 'suspended') this._ctx.resume();
   }
 
@@ -73,7 +70,6 @@ export class AudioEngine {
   }
 
   _get() {
-    if (!this._ctx) return null;
     if (this._ctx.state === 'suspended') this._ctx.resume();
     return this._ctx;
   }
