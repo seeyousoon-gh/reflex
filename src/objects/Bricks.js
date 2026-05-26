@@ -13,13 +13,13 @@ export class Bricks {
   }
 
   _build() {
-    this._ring(Cfg.outerCount,  Cfg.outerRadFrac,  6, Cfg.teal,        'crystal');
-    this._ring(Cfg.middleCount, Cfg.middleRadFrac,  8, Cfg.primaryGold, 'amber');
-    this._ring(Cfg.innerCount,  Cfg.innerRadFrac,   5, Cfg.silver,      'void');
+    this._ring(Cfg.outerCount,  Cfg.outerRadFrac,  6, Cfg.teal,        0, 'sine');
+    this._ring(Cfg.middleCount, Cfg.middleRadFrac,  8, Cfg.primaryGold, 1, 'triangle');
+    this._ring(Cfg.innerCount,  Cfg.innerRadFrac,   5, Cfg.silver,      2, 'sine');
     this._core();
   }
 
-  _ring(count, radFrac, sides, color, type) {
+  _ring(count, radFrac, sides, color, ringIdx, waveType) {
     const radius = this.refR * radFrac;
     const arc    = (2 * Math.PI * radius) / count;
     const bW     = arc * 0.72;
@@ -41,7 +41,10 @@ export class Bricks {
 
       const gfx = this.scene.add.graphics().setDepth(3);
       this._drawPoly(gfx, bx, by, bW * 0.88, bH * 0.88, ba, sides, color);
-      body.gameObject = gfx;
+      body.gameObject  = gfx;
+      body._ringIndex  = ringIdx;
+      body._noteIndex  = i % 5;
+      body._waveType   = waveType;
       this.remaining++;
     }
   }

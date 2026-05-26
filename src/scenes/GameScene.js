@@ -1,7 +1,8 @@
-import { Cfg }    from '../config.js';
-import { Ball }   from '../objects/Ball.js';
-import { Paddle } from '../objects/Paddle.js';
-import { Bricks } from '../objects/Bricks.js';
+import { Cfg }         from '../config.js';
+import { Ball }        from '../objects/Ball.js';
+import { Paddle }      from '../objects/Paddle.js';
+import { Bricks }      from '../objects/Bricks.js';
+import { AudioEngine } from '../audio/AudioEngine.js';
 
 const MB = () => Phaser.Physics.Matter.Matter.Body;
 
@@ -19,6 +20,7 @@ export class GameScene extends Phaser.Scene {
     this.combo     = 0;
     this.score     = 0;
     this.targetPPS = Cfg.speedAwakening;
+    this.audio     = new AudioEngine();
 
     this._prevPaddleX  = this.W / 2;
     this._paddleVelPPF = 0;
@@ -132,6 +134,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p) => {
       lastX = p.x;
+      this.audio.unlock();
       if (!this.ball.launched) this._launchBall();
     });
 
@@ -269,14 +272,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.ball.jitter(0.5);
+    this.audio.paddleTick();
   }
 
   _onBrickHit(brickBody, pair) {
     if (brickBody._destroyed) return;
 
     if (brickBody._indestructible) {
-      // Core: reflect ball but never destroy
       this._reflectBall(pair, 1);
+      this.audio.corePing();
       return;
     }
 
@@ -284,6 +288,7 @@ export class GameScene extends Phaser.Scene {
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
 
+    this.audio.brickNote(brickBody._ringIndex, brickBody._noteIndex, brickBody._waveType);
     this._reflectBall(pair, 2);
     this._incrementCombo();
 
@@ -358,6 +363,7 @@ export class GameScene extends Phaser.Scene {
     this.resonance--;
     this._drawResOrbs();
     this._updateHUD();
+    this.audio.missTone();
 
     if (this.resonance <= 0) {
       this._gameOver();
@@ -369,6 +375,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _handleLevelClear() {
+    this.audio.clearArpeggio();
     const txt = this.add.text(this.W / 2, this.H / 2, 'Ascend.', {
       fontFamily: 'Georgia, serif',
       fontSize:   '36px',
@@ -380,6 +387,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _gameOver() {
+    this.audio.gameOverTone();
     this.ball.reset(this.W / 2, this.ballRestY);
 
     const txt = this.add.text(this.W / 2, this.H / 2, 'Return.', {
