@@ -22,9 +22,10 @@ export class GameScene extends Phaser.Scene {
     this.targetPPS = Cfg.speedAwakening;
     this.audio     = new AudioEngine();
 
-    this._prevPaddleX  = this.W / 2;
-    this._paddleVelPPF = 0;
-    this._paddleVelBuf = [0, 0, 0, 0];
+    this._prevPaddleX     = this.W / 2;
+    this._paddleVelPPF    = 0;
+    this._paddleVelBuf    = [0, 0, 0, 0];
+    this._reflectedThisStep = false;
 
     this._buildBackground();
     this._buildWalls();
@@ -280,7 +281,10 @@ export class GameScene extends Phaser.Scene {
     if (brickBody._destroyed) return;
 
     if (brickBody._indestructible) {
-      this._reflectBall(pair, 1);
+      if (!this._reflectedThisStep) {
+        this._reflectBall(pair, 1);
+        this._reflectedThisStep = true;
+      }
       this.audio.corePing();
       return;
     }
@@ -290,7 +294,11 @@ export class GameScene extends Phaser.Scene {
     this.matter.world.remove(brickBody);
 
     this.audio.brickNote(brickBody._ringIndex, brickBody._noteIndex, brickBody._waveType);
-    this._reflectBall(pair, 2);
+    // Reflect only once per physics step — simultaneous collisions would cancel each other.
+    if (!this._reflectedThisStep) {
+      this._reflectBall(pair, 2);
+      this._reflectedThisStep = true;
+    }
     this._incrementCombo();
 
     if (this.bricks) {
@@ -320,6 +328,8 @@ export class GameScene extends Phaser.Scene {
   //  Game loop
   // ─────────────────────────────────────────────────────────────────────────
   update() {
+    this._reflectedThisStep = false;
+
     const frameVel = this.paddle.x - this._prevPaddleX;
     this._paddleVelBuf.push(frameVel);
     this._paddleVelBuf.shift();
