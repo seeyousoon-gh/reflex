@@ -156,6 +156,7 @@ export class GameScene extends Phaser.Scene {
     const rad = Phaser.Math.DegToRad(deg);
     const spd = this.targetPPS / 60;
     this.ball.launch(Math.cos(rad) * spd, -Math.sin(rad) * spd);
+    this.audio.startAmbient();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -350,10 +351,15 @@ export class GameScene extends Phaser.Scene {
     this.score += 100 * Math.ceil(this.combo / Cfg.comboStem2);
 
     // Speed escalates at milestones; stays at the new tier until scene restart.
-    if      (this.combo === Cfg.comboStem2)  { this.targetPPS = Cfg.speedRecognition;   this._flashPhase('Recognition');  }
-    else if (this.combo === Cfg.comboStem3)  { this.targetPPS = Cfg.speedDeepening;     this._flashPhase('Deepening');    }
-    else if (this.combo === Cfg.comboStem4)  {                                           this._flashPhase('Transcendence');}
-    else if (this.combo === Cfg.comboMirror) { this.targetPPS = Cfg.speedTranscendence; this._flashPhase('Mirror State'); }
+    if      (this.combo === Cfg.comboStem2)  { this.targetPPS = Cfg.speedRecognition;   this._flashPhase('Recognition');   this.audio.unlockStem(1); }
+    else if (this.combo === Cfg.comboStem3)  { this.targetPPS = Cfg.speedDeepening;     this._flashPhase('Deepening');     this.audio.unlockStem(2); }
+    else if (this.combo === Cfg.comboStem4)  {                                           this._flashPhase('Transcendence'); this.audio.unlockStem(3); }
+    else if (this.combo === Cfg.comboMirror) {
+      this.targetPPS = Cfg.speedTranscendence;
+      this._flashPhase('Mirror State');
+      this.audio.startMirror();
+      this.time.delayedCall(Cfg.mirrorDuration * 1000, () => this.audio.endMirror());
+    }
 
     this._updateHUD();
   }
@@ -375,6 +381,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _handleLevelClear() {
+    this.audio.stop();
     this.audio.clearArpeggio();
     const txt = this.add.text(this.W / 2, this.H / 2, 'Ascend.', {
       fontFamily: 'Georgia, serif',
@@ -387,6 +394,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   _gameOver() {
+    this.audio.stop();
     this.audio.gameOverTone();
     this.ball.reset(this.W / 2, this.ballRestY);
 
