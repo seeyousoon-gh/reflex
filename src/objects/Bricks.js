@@ -44,6 +44,7 @@ export class Bricks {
       body.gameObject = gfx;
       body._ringIndex = 0;
       body._waveType  = 'sine';
+      body._color     = Cfg.ivory;
       this.remaining++;
     }
   }
@@ -69,6 +70,7 @@ export class Bricks {
       body.gameObject = gfx;
       body._ringIndex = ringIdx;
       body._waveType  = waveType;
+      body._color     = color;
       this.remaining++;
     }
   }

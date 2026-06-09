@@ -3,6 +3,8 @@ import { Ball }        from '../objects/Ball.js';
 import { Paddle }      from '../objects/Paddle.js';
 import { Bricks }      from '../objects/Bricks.js';
 import { AudioEngine } from '../audio/AudioEngine.js';
+import { Trail }       from '../vfx/Trail.js';
+import { Particles }   from '../vfx/Particles.js';
 
 const MB = () => Phaser.Physics.Matter.Matter.Body;
 
@@ -36,6 +38,9 @@ export class GameScene extends Phaser.Scene {
     this._buildHintText();
     this._setupInput();
     this._setupCollisions();
+
+    this.trail = new Trail(this, this.ball);
+    this.vfx   = new Particles(this);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -43,6 +48,48 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────
   _buildBackground() {
     this.cameras.main.setBackgroundColor(Cfg.background);
+    this._buildMandala();
+  }
+
+  _buildMandala() {
+    const cx   = this.W / 2;
+    const cy   = this.H * 0.36;
+    const refR = this.W * 0.46;
+
+    // Static layer: concentric rings at each brick-ring radius + central soft glow
+    const bgS = this.add.graphics().setDepth(0).setPosition(cx, cy);
+    [50, 32, 18, 8].forEach((r, i) => {
+      bgS.fillStyle(Cfg.primaryGold, 0.013 - i * 0.002);
+      bgS.fillCircle(0, 0, r);
+    });
+    [Cfg.melodyRadFrac, Cfg.outerRadFrac, Cfg.middleRadFrac, Cfg.innerRadFrac].forEach(f => {
+      bgS.lineStyle(0.6, Cfg.ivory, 0.055);
+      bgS.strokeCircle(0, 0, refR * f);
+    });
+
+    // Layer 1: 18 radial spokes — slow clockwise
+    this._bgL1 = this.add.graphics().setDepth(0).setPosition(cx, cy);
+    for (let i = 0; i < 18; i++) {
+      const a = (2 * Math.PI * i) / 18;
+      this._bgL1.lineStyle(0.6, Cfg.primaryGold, 0.07);
+      this._bgL1.beginPath();
+      this._bgL1.moveTo(0, 0);
+      this._bgL1.lineTo(Math.cos(a) * refR * 0.88, Math.sin(a) * refR * 0.88);
+      this._bgL1.strokePath();
+    }
+
+    // Layer 2: 12 small diamonds at 70% radius — slow counter-clockwise
+    this._bgL2 = this.add.graphics().setDepth(0).setPosition(cx, cy);
+    const r2   = refR * 0.70;
+    const ds   = 4;
+    for (let i = 0; i < 12; i++) {
+      const a  = (2 * Math.PI * i) / 12;
+      const rx = Math.cos(a) * r2;
+      const ry = Math.sin(a) * r2;
+      this._bgL2.fillStyle(Cfg.teal, 0.11);
+      this._bgL2.fillTriangle(rx, ry - ds, rx + ds * 0.7, ry, rx, ry + ds);
+      this._bgL2.fillTriangle(rx, ry - ds, rx - ds * 0.7, ry, rx, ry + ds);
+    }
   }
 
   _buildWalls() {
@@ -289,10 +336,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const bx    = brickBody.position.x;
+    const by    = brickBody.position.y;
+    const color = brickBody._color ?? 0xFFFFFF;
+
     brickBody._destroyed = true;
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
 
+    this.vfx.spawnBurst(bx, by, color);
     this.audio.brickNote(brickBody._waveType, brickBody._ringIndex);
     // Reflect only once per physics step — simultaneous collisions would cancel each other.
     if (!this._reflectedThisStep) {
@@ -329,6 +381,12 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────
   update() {
     this._reflectedThisStep = false;
+
+    // VFX — always run
+    this._bgL1.rotation += 0.0003;
+    this._bgL2.rotation -= 0.0002;
+    this.trail.update();
+    this.vfx.update();
 
     const frameVel = this.paddle.x - this._prevPaddleX;
     this._paddleVelBuf.push(frameVel);
