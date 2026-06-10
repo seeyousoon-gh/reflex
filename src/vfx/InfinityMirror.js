@@ -2,8 +2,8 @@ import { Cfg } from '../config.js';
 
 const LAYERS    = 9;
 const K         = 0.80;    // scale factor per layer (geometric depth)
-const MAX_SHIFT = 52;      // max gyro parallax in px
-const SMOOTH    = 0.05;    // gyro lerp per frame
+const MAX_SHIFT = 88;      // max gyro parallax in px
+const SMOOTH    = 0.09;    // gyro lerp per frame
 
 export class InfinityMirror {
   constructor(scene) {
@@ -17,11 +17,18 @@ export class InfinityMirror {
   }
 
   _setupGyro() {
-    // gamma = left/right (-90→90), beta = front/back (-180→180)
-    // On a portrait phone beta ≈ 75° at rest — normalise around that.
+    // Calibrate to wherever the player is holding the phone on first event.
+    // All motion is relative to that baseline — no assumed angle.
+    this._baseGamma = null;
+    this._baseBeta  = null;
+
     this._handler = ({ gamma, beta }) => {
-      const tx = Phaser.Math.Clamp((gamma || 0) / 30, -1, 1);
-      const ty = Phaser.Math.Clamp(((beta  || 75) - 75) / 30, -1, 1);
+      if (this._baseGamma === null) {
+        this._baseGamma = gamma ?? 0;
+        this._baseBeta  = beta  ?? 0;
+      }
+      const tx = Phaser.Math.Clamp(((gamma ?? 0) - this._baseGamma) / 28, -1, 1);
+      const ty = Phaser.Math.Clamp(((beta  ?? 0) - this._baseBeta)  / 28, -1, 1);
       this._gx += (tx - this._gx) * SMOOTH;
       this._gy += (ty - this._gy) * SMOOTH;
     };

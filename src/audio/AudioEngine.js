@@ -28,18 +28,18 @@ const RING_CFG = [
   { vol: 0.16, dur: 2.0, octave: -2 },  // 3: inner — bass
 ];
 
-// Drone pairs: each pitch gets two oscillators 0.3 Hz apart.
-// The beating between them (~0.3 Hz = one pulse every 3 s) creates
-// a slow, natural breath with no percussion needed.
-// Dmaj7: D2(73.42) + A2(110.00)  |  Gmaj7: G2(98.00) + D3(146.83)
-const DMAJ_BASES  = [[73.42, 0.10], [110.00, 0.07]];
-const GMAJ_BASES  = [[98.00, 0.10], [146.83, 0.07]];
-const DETUNE_OFFSET = 0.30;  // Hz between each pair
+// Drone pairs: each pitch gets two oscillators 0.12 Hz apart.
+// Raised to D3/A3 (was D2/A2) — mid-register is warmer, less oppressive.
+// Dmaj: D3(146.83) + A3(220.00)  |  Gmaj: G3(196.00) + D4(293.66)
+const DMAJ_BASES    = [[146.83, 0.055], [220.00, 0.035]];
+const GMAJ_BASES    = [[196.00, 0.055], [293.66, 0.035]];
+const DETUNE_OFFSET = 0.12;  // Hz — subtle ~8 s acoustic breath
 
 export class AudioEngine {
   constructor() {
     this._ctx            = new (window.AudioContext || window.webkitAudioContext)();
     this._drone          = [];     // {osc, gain, baseFreq, detuneOffset, baseVol}
+    this._shimmer        = [];     // high overtone pair — fades in over 20-30 s
     this._stemLevel      = 0;
     this._mirror         = false;
     this._arpTimer       = null;
@@ -80,6 +80,20 @@ export class AudioEngine {
       });
     });
 
+    // Shimmer: A4 + E5 — barely-audible high overtones, very slow fade-in
+    [[440.00, 0.010, 22], [659.25, 0.007, 34]].forEach(([freq, vol, rise]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + rise);
+      osc.start();
+      this._shimmer.push({ osc, gain });
+    });
+
     this._startChordCycle();
   }
 
@@ -90,14 +104,14 @@ export class AudioEngine {
     if (level === 1) {
       // Recognition: gentle harmonic layer — no rhythm pulse, just a soft overtone swell
       this._drone.forEach(d => {
-        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.3, ctx.currentTime + 3.0);
+        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.3, ctx.currentTime + 4.0);
       });
     } else if (level === 2) {
       this._arpNext = ctx.currentTime + 1.0;
       this._scheduleArp();
     } else if (level === 3) {
       this._drone.forEach(d => {
-        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.6, ctx.currentTime + 3.0);
+        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.6, ctx.currentTime + 4.0);
       });
     }
   }
@@ -134,7 +148,12 @@ export class AudioEngine {
       d.gain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.5);
       d.osc.stop(ctx.currentTime + 1.6);
     });
+    this._shimmer.forEach(d => {
+      d.gain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.5);
+      d.osc.stop(ctx.currentTime + 1.6);
+    });
     this._drone        = [];
+    this._shimmer      = [];
     this._stemLevel    = 0;
     this._mirror       = false;
     this._melodyCursor = 0;
@@ -225,22 +244,22 @@ export class AudioEngine {
     const notes = this._stemLevel >= 3 ? ODE_ARP_BLOOM : ODE_ARP;
     while (this._arpNext < ctx.currentTime + 0.3) {
       // Long attack (60 ms) + decay that overlaps the next note → notes blend like a held pedal
-      this._tone(notes[this._arpIdx % notes.length], 'sine', 0.055, this._arpNext, 1.1, 0.06);
+      this._tone(notes[this._arpIdx % notes.length], 'sine', 0.038, this._arpNext, 1.4, 0.09);
       this._arpIdx++;
       this._arpNext += this._arpInterval;
     }
     this._arpTimer = setTimeout(() => this._scheduleArp(), 100);
   }
 
-  // ── Chord cycle — G↔D every 16 seconds, drone glides over 3 s ─────────────
+  // ── Chord cycle — G↔D every 24 seconds, drone glides over 4 s ─────────────
 
   _startChordCycle() {
     const advance = () => {
       this._chordPhase = (this._chordPhase + 1) % 2;
       this._morphDrone();
-      this._chordTimer = setTimeout(advance, 16000);
+      this._chordTimer = setTimeout(advance, 24000);
     };
-    this._chordTimer = setTimeout(advance, 16000);
+    this._chordTimer = setTimeout(advance, 24000);
   }
 
   _morphDrone() {
@@ -250,8 +269,8 @@ export class AudioEngine {
     const ctx    = this._ctx;
     this._drone.forEach((d, i) => {
       const [newBase, newVol] = bases[Math.floor(i / 2)];
-      d.osc.frequency.linearRampToValueAtTime(newBase + d.detuneOffset, ctx.currentTime + 3.0);
-      d.gain.gain.linearRampToValueAtTime(newVol * bright, ctx.currentTime + 3.0);
+      d.osc.frequency.linearRampToValueAtTime(newBase + d.detuneOffset, ctx.currentTime + 4.0);
+      d.gain.gain.linearRampToValueAtTime(newVol * bright, ctx.currentTime + 4.0);
       d.baseFreq = newBase;
       d.baseVol  = newVol;
     });
