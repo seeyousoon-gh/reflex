@@ -17,8 +17,6 @@ export class InfinityMirror {
   }
 
   _setupGyro() {
-    // Calibrate to wherever the player is holding the phone on first event.
-    // All motion is relative to that baseline — no assumed angle.
     this._baseGamma = null;
     this._baseBeta  = null;
 
@@ -35,24 +33,26 @@ export class InfinityMirror {
 
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      this._needsPerm = true;
+      // iOS 13+: permission must be called synchronously inside a native DOM
+      // gesture. Phaser's pointerdown fires too late — hook the raw touchstart
+      // with capture so we get it before any framework processing.
+      const ask = () => {
+        DeviceOrientationEvent.requestPermission()
+          .then(s => {
+            if (s === 'granted') {
+              window.addEventListener('deviceorientation', this._handler, true);
+            }
+          })
+          .catch(() => {});
+      };
+      document.addEventListener('touchstart', ask, { once: true, capture: true });
     } else {
       window.addEventListener('deviceorientation', this._handler, true);
     }
   }
 
-  // Call from a user-gesture handler (pointerdown) — iOS only
-  requestPermission() {
-    if (!this._needsPerm) return;
-    DeviceOrientationEvent.requestPermission()
-      .then(s => {
-        if (s === 'granted') {
-          window.addEventListener('deviceorientation', this._handler, true);
-          this._needsPerm = false;
-        }
-      })
-      .catch(() => {});
-  }
+  // No-op: permission is now handled automatically via native touchstart
+  requestPermission() {}
 
   update() {
     const gfx = this._gfx;
