@@ -49,6 +49,7 @@ export class AudioEngine {
     this._arpTimer       = null;
     this._arpNext        = 0;
     this._arpIdx         = 0;
+    this._baseInterval   = 0.75;
     this._arpInterval    = 0.75;
     this._melodyCursor   = 0;
     this._transportStart = 0;
@@ -107,7 +108,7 @@ export class AudioEngine {
 
   startMirror() {
     this._mirror      = true;
-    this._arpInterval = 0.375;
+    this._arpInterval = this._baseInterval * 0.5;
     const ctx = this._ctx;
     this._drone.forEach(d => {
       d.osc.frequency.linearRampToValueAtTime(
@@ -119,7 +120,7 @@ export class AudioEngine {
 
   endMirror() {
     this._mirror      = false;
-    this._arpInterval = 0.75;
+    this._arpInterval = this._baseInterval;
     const ctx   = this._ctx;
     const bright = this._stemLevel >= 3 ? 1.6 : this._stemLevel >= 1 ? 1.3 : 1.0;
     this._drone.forEach(d => {
@@ -170,6 +171,24 @@ export class AudioEngine {
     const ctx  = this._get();
     const freq = this._chordPhase === 0 ? 293.66 : 392.00;
     this._tone(freq, 'sine', 0.04, ctx.currentTime, 0.07);
+  }
+
+  // Beat-trigger brick: simultaneous chord stab on current harmonic phase
+  chordStab() {
+    const ctx   = this._get();
+    const now   = ctx.currentTime;
+    const notes = this._chordPhase === 0
+      ? [293.66, 369.99, 440.00]   // D4 F#4 A4  (Dmaj)
+      : [392.00, 493.88, 587.33];  // G4 B4  D5  (Gmaj)
+    notes.forEach((f, i) => {
+      this._tone(f, 'sine', 0.09, now + i * 0.012, 0.40);
+    });
+  }
+
+  // Coupled to ball speed — call every frame; mirror state applies half-speed on top
+  setArpTempo(baseInterval) {
+    this._baseInterval = baseInterval;
+    this._arpInterval  = baseInterval * (this._mirror ? 0.5 : 1.0);
   }
 
   corePing() {

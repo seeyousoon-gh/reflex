@@ -357,6 +357,7 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx.spawnBurst(bx, by, color);
     this.audio.brickNote(brickBody._waveType, brickBody._ringIndex);
+    if (brickBody._isBeat) this.audio.chordStab();
     if (!this._reflectedThisStep) {
       this._reflectBall(pair, 2);
       this._reflectedThisStep = true;
@@ -431,6 +432,10 @@ export class GameScene extends Phaser.Scene {
     this._resolvePaddle();
     this._resolveWalls();
     this.ball.normalizeSpeed(this.targetPPS / 60);
+
+    // Couple arpeggio tempo to ball speed — faster play = faster pulse
+    const arpInterval = Phaser.Math.Clamp(0.95 - this.targetPPS / 1400, 0.40, 0.90);
+    this.audio.setArpTempo(arpInterval);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

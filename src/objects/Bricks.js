@@ -28,6 +28,7 @@ export class Bricks {
     const arc    = (2 * Math.PI * radius) / count;
     const bW     = arc * 0.68;
     const bH     = Math.min(radius * 0.13, 11);
+    const beats  = new Set([0, Math.floor(count / 3), Math.floor(2 * count / 3)]);
 
     for (let i = 0; i < count; i++) {
       const a  = (2 * Math.PI * i) / count - Math.PI / 2;
@@ -41,10 +42,15 @@ export class Bricks {
       });
       const gfx = this.scene.add.graphics().setDepth(3);
       this._drawPoly(gfx, bx, by, bW * 0.88, bH * 0.88, ba, 4, Cfg.ivory);
+      if (beats.has(i)) {
+        gfx.fillStyle(0xFFFFFF, 0.75);
+        gfx.fillCircle(bx, by, 1.8);
+      }
       body.gameObject = gfx;
       body._ringIndex = 0;
       body._waveType  = 'sine';
       body._color     = Cfg.ivory;
+      body._isBeat    = beats.has(i);
       this.remaining++;
     }
   }
@@ -54,6 +60,7 @@ export class Bricks {
     const arc    = (2 * Math.PI * radius) / count;
     const bW     = arc * 0.72;
     const bH     = Math.min(radius * 0.16, 13);
+    const beats  = new Set([0, Math.floor(count / 3), Math.floor(2 * count / 3)]);
 
     for (let i = 0; i < count; i++) {
       const a  = (2 * Math.PI * i) / count - Math.PI / 2;
@@ -67,10 +74,15 @@ export class Bricks {
       });
       const gfx = this.scene.add.graphics().setDepth(3);
       this._drawPoly(gfx, bx, by, bW * 0.88, bH * 0.88, ba, sides, color);
+      if (beats.has(i)) {
+        gfx.fillStyle(0xFFFFFF, 0.65);
+        gfx.fillCircle(bx, by, 1.8);
+      }
       body.gameObject = gfx;
       body._ringIndex = ringIdx;
       body._waveType  = waveType;
       body._color     = color;
+      body._isBeat    = beats.has(i);
       this.remaining++;
     }
   }
