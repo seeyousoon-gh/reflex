@@ -1,9 +1,11 @@
 export class Particles {
   constructor(scene) {
-    this.scene  = scene;
-    this._gfx   = scene.add.graphics().setDepth(2);
-    this._dots  = [];   // ambient floating dust
-    this._burst = [];   // active brick-break fragments
+    this.scene    = scene;
+    this._gfx     = scene.add.graphics().setDepth(2);
+    this._ringGfx = scene.add.graphics().setDepth(4);
+    this._dots    = [];
+    this._burst   = [];
+    this._rings   = [];   // pitch ring pulses
     this._initDots(scene.scale.width, scene.scale.height);
   }
 
@@ -20,12 +22,10 @@ export class Particles {
     }
   }
 
-  // Call once per frame — updates ambient dots and burst fragments on a single Graphics.
   update() {
     const gfx = this._gfx;
     gfx.clear();
 
-    // Ambient dust drifts upward, wraps at top
     for (const d of this._dots) {
       d.y += d.vy;
       if (d.y < -4) { d.y = d.H + 4; d.x = Math.random() * d.W; }
@@ -33,15 +33,25 @@ export class Particles {
       gfx.fillCircle(d.x, d.y, d.r);
     }
 
-    // Burst fragments — velocity + subtle gravity, fade by lifetime
     this._burst = this._burst.filter(p => p.life > 0);
     for (const p of this._burst) {
       p.x  += p.vx;
       p.y  += p.vy;
-      p.vy += 0.06;   // light gravity
+      p.vy += 0.06;
       p.life--;
       gfx.fillStyle(p.color, p.life / p.maxLife);
       gfx.fillRect(p.x - p.s * 0.5, p.y - p.s * 0.5, p.s, p.s);
+    }
+
+    // Pitch ring pulses — expand and fade
+    const rgfx = this._ringGfx;
+    rgfx.clear();
+    this._rings = this._rings.filter(r => r.alpha > 0.02);
+    for (const ring of this._rings) {
+      ring.r    += 3.2;
+      ring.alpha -= 0.033;
+      rgfx.lineStyle(1.2, ring.color, ring.alpha);
+      rgfx.strokeCircle(ring.x, ring.y, ring.r);
     }
   }
 
@@ -59,5 +69,10 @@ export class Particles {
         color, life, maxLife: life,
       });
     }
+  }
+
+  // Warm (gold) for high-register hits, cool (teal) for low-register hits
+  spawnRing(x, y, color) {
+    this._rings.push({ x, y, r: 10, alpha: 0.60, color });
   }
 }

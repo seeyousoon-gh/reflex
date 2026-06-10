@@ -135,6 +135,11 @@ export class GameScene extends Phaser.Scene {
     this._meterGfx = this.add.graphics().setDepth(10);
     this._drawMirrorMeter();
 
+    // Melody progress: 16 dots tracking position in Ode to Joy phrase
+    this._arcGfx    = this.add.graphics().setDepth(10);
+    this._arcFlashAt = -1000;
+    this._drawMelodyArc();
+
     // Persistent phase label — bottom centre, very faint
     this._phaseTxt = this.add.text(this.W / 2, this.H - 22, '', {
       fontFamily: 'Georgia, serif', fontSize: '11px', color: '#C9A84C',
@@ -192,6 +197,28 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => txt.destroy(),
       }),
     });
+  }
+
+  _drawMelodyArc() {
+    const gfx      = this._arcGfx;
+    gfx.clear();
+    const N        = 16;
+    const margin   = this.W * 0.12;
+    const y        = 70;
+    const spacing  = (this.W - 2 * margin) / (N - 1);
+    const cursor   = this.audio._melodyCursor % N;
+    const flashing = (this.time.now - this._arcFlashAt) < 220;
+
+    for (let i = 0; i < N; i++) {
+      const x       = margin + i * spacing;
+      const active  = i === cursor;
+      const flashed = active && flashing;
+      gfx.fillStyle(
+        active ? Cfg.primaryGold : Cfg.ivory,
+        flashed ? 1.0 : active ? 0.70 : 0.18,
+      );
+      gfx.fillCircle(x, y, flashed ? 3.0 : active ? 2.2 : 1.3);
+    }
   }
 
   _updateHUD() {
@@ -355,9 +382,12 @@ export class GameScene extends Phaser.Scene {
     if (brickBody.gameObject) brickBody.gameObject.destroy();
     this.matter.world.remove(brickBody);
 
+    const ringColor = brickBody._ringIndex <= 1 ? Cfg.primaryGold : Cfg.teal;
     this.vfx.spawnBurst(bx, by, color);
+    this.vfx.spawnRing(bx, by, ringColor);
     this.audio.brickNote(brickBody._waveType, brickBody._ringIndex);
     if (brickBody._isBeat) this.audio.chordStab();
+    this._arcFlashAt = this.time.now;
     if (!this._reflectedThisStep) {
       this._reflectBall(pair, 2);
       this._reflectedThisStep = true;
@@ -397,6 +427,7 @@ export class GameScene extends Phaser.Scene {
 
     this.trail.update();
     this.vfx.update();
+    this._drawMelodyArc();
 
     // Mirror State: expanding ring pulses from mandala centre
     if (this._mirrorActive && this._mirrorRingGfx) {
