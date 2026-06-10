@@ -24,10 +24,16 @@ export class GameScene extends Phaser.Scene {
     this.targetPPS = Cfg.speedAwakening;
     this.audio     = new AudioEngine();
 
-    this._prevPaddleX     = this.W / 2;
-    this._paddleVelPPF    = 0;
-    this._paddleVelBuf    = [0, 0, 0, 0];
+    this._prevPaddleX       = this.W / 2;
+    this._paddleVelPPF      = 0;
+    this._paddleVelBuf      = [0, 0, 0, 0];
     this._reflectedThisStep = false;
+    this._mirrorActive      = false;
+    this._mirrorRings       = [];
+    this._mirrorRingGfx     = null;
+    this._mirrorTimer       = null;
+    this._mirrorRingPhase   = 0;
+    this._warnTween         = null;
 
     this._buildBackground();
     this._buildWalls();
@@ -92,9 +98,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  _buildWalls() {
-    // Walls handled manually in _resolveWalls() — no physics bodies needed.
-  }
+  _buildWalls() {}
 
   _buildPaddle() {
     this.paddleY = this.H * Cfg.paddleYFrac;
@@ -111,24 +115,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  HUD — resonance orbs · combo · score
+  //  HUD — resonance orbs · combo · score · mirror meter · phase label
   // ─────────────────────────────────────────────────────────────────────────
   _buildHUD() {
     const y = 28;
 
-    // Three resonance orbs, centred at top
     this._resGfx = this.add.graphics().setDepth(10);
     this._drawResOrbs();
 
-    // Combo (top-left, hidden until combo > 1)
     this._comboTxt = this.add.text(20, y, '', {
       fontFamily: 'Georgia, serif', fontSize: '13px', color: '#C9A84C',
     }).setOrigin(0, 0.5).setDepth(10).setAlpha(0.75);
 
-    // Score (top-right)
     this._scoreTxt = this.add.text(this.W - 20, y, '0', {
       fontFamily: 'Georgia, serif', fontSize: '13px', color: '#F0ECD8',
     }).setOrigin(1, 0.5).setDepth(10).setAlpha(0.45);
+
+    // Mirror meter: thin line below orbs, expands from centre as combo grows
+    this._meterGfx = this.add.graphics().setDepth(10);
+    this._drawMirrorMeter();
+
+    // Persistent phase label — bottom centre, very faint
+    this._phaseTxt = this.add.text(this.W / 2, this.H - 22, '', {
+      fontFamily: 'Georgia, serif', fontSize: '11px', color: '#C9A84C',
+    }).setOrigin(0.5, 1).setDepth(10).setAlpha(0.22);
   }
 
   _drawResOrbs() {
@@ -146,8 +156,31 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Brief centred phase-name flash — fades in, holds, fades out.
+  _drawMirrorMeter() {
+    const gfx      = this._meterGfx;
+    gfx.clear();
+    const progress = Math.min(this.combo / Cfg.comboMirror, 1.0);
+    if (progress <= 0) return;
+
+    const y  = 46;
+    const cx = this.W / 2;
+    const hw = this.W * 0.38 * progress;
+    const a  = 0.15 + progress * 0.45;
+
+    gfx.lineStyle(1, Cfg.primaryGold, a);
+    gfx.beginPath();
+    gfx.moveTo(cx - hw, y);
+    gfx.lineTo(cx + hw, y);
+    gfx.strokePath();
+
+    gfx.fillStyle(Cfg.primaryGold, a * 1.3);
+    gfx.fillCircle(cx - hw, y, 1.5);
+    gfx.fillCircle(cx + hw, y, 1.5);
+  }
+
   _flashPhase(name) {
+    this._phaseTxt.setText(name);
+
     const txt = this.add.text(this.W / 2, this.H * 0.54, name, {
       fontFamily: 'Georgia, serif', fontSize: '17px', color: '#C9A84C',
     }).setOrigin(0.5).setDepth(15).setAlpha(0);
@@ -164,6 +197,7 @@ export class GameScene extends Phaser.Scene {
   _updateHUD() {
     this._comboTxt.setText(this.combo > 1 ? `× ${this.combo}` : '');
     this._scoreTxt.setText(`${this.score}`);
+    this._drawMirrorMeter();
   }
 
   _buildHintText() {
@@ -208,17 +242,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Collisions — only bricks; paddle is handled manually
+  //  Collisions
   // ─────────────────────────────────────────────────────────────────────────
   _setupCollisions() {
     this.matter.world.on('collisionstart', (event) => {
       for (const pair of event.pairs) {
         const la = pair.bodyA.label;
         const lb = pair.bodyB.label;
-
         if ((la === 'ball' || lb === 'ball') && (la === 'brick' || lb === 'brick')) {
-          const brickBody = la === 'brick' ? pair.bodyA : pair.bodyB;
-          this._onBrickHit(brickBody, pair);
+          this._onBrickHit(la === 'brick' ? pair.bodyA : pair.bodyB, pair);
         }
       }
     });
@@ -246,13 +278,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  Manual paddle collision — runs every frame, immune to tunnelling.
-  //
-  //  Entry face is determined by SAT (shortest penetration axis):
-  //    • Top-face: vertical overlap < horizontal overlap → bounce upward
-  //    • Side: horizontal overlap smaller → deflect sideways
-  //
-  //  No Matter.js body on paddle, ball is a sensor → nothing to fight.
+  //  Manual paddle collision (SAT, no Matter.js body)
   // ─────────────────────────────────────────────────────────────────────────
   _resolvePaddle() {
     if (!this.ball.launched) return;
@@ -266,24 +292,18 @@ export class GameScene extends Phaser.Scene {
     const by    = this.ball.y;
     const vel   = this.ball.body.velocity;
 
-    // AABB reject
     if (bx + r < px - halfW || bx - r > px + halfW) return;
     if (by + r < py - halfH || by - r > py + halfH) return;
 
-    // SAT: penetration depth on each axis — smallest axis = entry face
-    const overlapTop   = (by + r) - (py - halfH);   // depth from above
-    const overlapLeft  = (bx + r) - (px - halfW);   // depth from left
-    const overlapRight = (px + halfW) - (bx - r);   // depth from right
+    const overlapTop   = (by + r) - (py - halfH);
+    const overlapLeft  = (bx + r) - (px - halfW);
+    const overlapRight = (px + halfW) - (bx - r);
     const minHoriz     = Math.min(overlapLeft, overlapRight);
 
     if (overlapTop <= minHoriz && vel.y > 0) {
-      // Top-face hit — only when ball is moving downward.
-      // vel.y > 0 guard prevents re-triggering after bounce while the ball
-      // is still geometrically close to the paddle surface.
       MB().setPosition(this.ball.body, { x: bx, y: py - halfH - r - 1 });
       this._applyTopFaceBounce(bx);
     } else if (overlapTop > minHoriz) {
-      // Side hit — push out toward whichever side has less penetration
       const minSpeed = (this.targetPPS / 60) * 0.5;
       if (overlapLeft <= overlapRight) {
         MB().setPosition(this.ball.body, { x: px - halfW - r - 1, y: by });
@@ -293,33 +313,24 @@ export class GameScene extends Phaser.Scene {
         MB().setVelocity(this.ball.body, { x:  Math.max(Math.abs(vel.x), minSpeed), y: vel.y });
       }
     }
-    // overlapTop <= minHoriz && vel.y <= 0: ball already bounced upward,
-    // still in the zone geometrically — do nothing, let it clear.
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Top-face bounce — zone angle + swipe spin (same logic as before)
-  // ─────────────────────────────────────────────────────────────────────────
   _applyTopFaceBounce(contactX) {
     const vel   = this.ball.body.velocity;
     const speed = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
 
-    const halfW      = Cfg.paddleWidth / 2;
-    const relX       = Phaser.Math.Clamp((contactX - this.paddle.x) / halfW, -1, 1);
+    const halfW       = Cfg.paddleWidth / 2;
+    const relX        = Phaser.Math.Clamp((contactX - this.paddle.x) / halfW, -1, 1);
     const effectiveRX = Math.abs(relX) > 0.85 ? Math.sign(relX) : relX;
-
-    // left=-1 → 150°, centre=0 → 90°, right=+1 → 30°
-    const baseDeg   = 90 - effectiveRX * Cfg.paddleSteeringRange;
-    // swipe right (positive vel) → nudge angle down toward 30° (rightward)
-    const swipeNorm = Phaser.Math.Clamp(this._paddleVelPPF / Cfg.paddleSwipeNormPPF, -1, 1);
-    const finalDeg  = Phaser.Math.Clamp(baseDeg - swipeNorm * Cfg.paddleSwipeMaxDeg, 18, 162);
-    const finalRad  = Phaser.Math.DegToRad(finalDeg);
+    const baseDeg     = 90 - effectiveRX * Cfg.paddleSteeringRange;
+    const swipeNorm   = Phaser.Math.Clamp(this._paddleVelPPF / Cfg.paddleSwipeNormPPF, -1, 1);
+    const finalDeg    = Phaser.Math.Clamp(baseDeg - swipeNorm * Cfg.paddleSwipeMaxDeg, 18, 162);
+    const finalRad    = Phaser.Math.DegToRad(finalDeg);
 
     MB().setVelocity(this.ball.body, {
       x:  Math.cos(finalRad) * speed,
       y: -Math.sin(finalRad) * speed,
     });
-
     this.ball.jitter(0.5);
     this.audio.paddleTick();
   }
@@ -346,7 +357,6 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx.spawnBurst(bx, by, color);
     this.audio.brickNote(brickBody._waveType, brickBody._ringIndex);
-    // Reflect only once per physics step — simultaneous collisions would cancel each other.
     if (!this._reflectedThisStep) {
       this._reflectBall(pair, 2);
       this._reflectedThisStep = true;
@@ -359,12 +369,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // Specular reflection using the collision normal from Matter.js.
-  // Ball is a sensor so we own every velocity change — no engine impulse applied.
   _reflectBall(pair, jitterDeg) {
     const vel = this.ball.body.velocity;
     let { x: nx, y: ny } = pair.collision.normal;
-    // Ensure normal points away from surface toward ball
     if (vel.x * nx + vel.y * ny > 0) { nx = -nx; ny = -ny; }
     const dot   = vel.x * nx + vel.y * ny;
     const speed = Math.hypot(vel.x, vel.y) || (this.targetPPS / 60);
@@ -382,11 +389,26 @@ export class GameScene extends Phaser.Scene {
   update() {
     this._reflectedThisStep = false;
 
-    // VFX — always run
-    this._bgL1.rotation += 0.0003;
-    this._bgL2.rotation -= 0.0002;
+    // Mandala rotation — 4× faster during Mirror State
+    const rotMult = this._mirrorActive ? 4 : 1;
+    this._bgL1.rotation += 0.0003 * rotMult;
+    this._bgL2.rotation -= 0.0002 * rotMult;
+
     this.trail.update();
     this.vfx.update();
+
+    // Mirror State: expanding ring pulses from mandala centre
+    if (this._mirrorActive && this._mirrorRingGfx) {
+      const cx = this.W / 2, cy = this.H * 0.36;
+      this._mirrorRingGfx.clear();
+      this._mirrorRings = this._mirrorRings.filter(r => r.alpha > 0.02);
+      for (const ring of this._mirrorRings) {
+        ring.r     += 1.6;
+        ring.alpha -= 0.007;
+        this._mirrorRingGfx.lineStyle(1.5, ring.color, ring.alpha);
+        this._mirrorRingGfx.strokeCircle(cx, cy, ring.r);
+      }
+    }
 
     const frameVel = this.paddle.x - this._prevPaddleX;
     this._paddleVelBuf.push(frameVel);
@@ -418,7 +440,6 @@ export class GameScene extends Phaser.Scene {
     this.combo++;
     this.score += 100 * Math.ceil(this.combo / Cfg.comboStem2);
 
-    // Speed escalates at milestones; stays at the new tier until scene restart.
     if      (this.combo === Cfg.comboStem2)  { this.targetPPS = Cfg.speedRecognition;   this._flashPhase('Recognition');   this.audio.unlockStem(1); }
     else if (this.combo === Cfg.comboStem3)  { this.targetPPS = Cfg.speedDeepening;     this._flashPhase('Deepening');     this.audio.unlockStem(2); }
     else if (this.combo === Cfg.comboStem4)  {                                           this._flashPhase('Transcendence'); this.audio.unlockStem(3); }
@@ -426,7 +447,11 @@ export class GameScene extends Phaser.Scene {
       this.targetPPS = Cfg.speedTranscendence;
       this._flashPhase('Mirror State');
       this.audio.startMirror();
-      this.time.delayedCall(Cfg.mirrorDuration * 1000, () => this.audio.endMirror());
+      this._startMirrorVisuals();
+      this.time.delayedCall(Cfg.mirrorDuration * 1000, () => {
+        this.audio.endMirror();
+        this._stopMirrorVisuals();
+      });
     }
 
     this._updateHUD();
@@ -438,23 +463,81 @@ export class GameScene extends Phaser.Scene {
     this._drawResOrbs();
     this._updateHUD();
     this.audio.missTone();
+    this._missFlash();
 
     if (this.resonance <= 0) {
       this._gameOver();
       return;
     }
 
+    if (this.resonance === 1) this._startResonanceWarning();
+
     this.ball.reset(this.paddle.x, this.ballRestY);
     this.hintText.setPosition(this.paddle.x, this.ballRestY - 40).setVisible(true);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Layer 6 — Mirror State visuals
+  // ─────────────────────────────────────────────────────────────────────────
+  _startMirrorVisuals() {
+    this._mirrorActive    = true;
+    this._mirrorRings     = [];
+    this._mirrorRingPhase = 0;
+    this._mirrorRingGfx   = this.add.graphics().setDepth(3);
+
+    this.cameras.main.flash(700, 160, 80, 255);
+
+    this._mirrorTimer = this.time.addEvent({
+      delay: 550, repeat: -1,
+      callback: () => {
+        const color = (this._mirrorRingPhase++ % 2 === 0) ? Cfg.teal : Cfg.primaryGold;
+        this._mirrorRings.push({ r: 18, alpha: 0.55, color });
+      },
+    });
+  }
+
+  _stopMirrorVisuals() {
+    this._mirrorActive = false;
+    if (this._mirrorTimer)   { this._mirrorTimer.remove();    this._mirrorTimer   = null; }
+    if (this._mirrorRingGfx) { this._mirrorRingGfx.destroy(); this._mirrorRingGfx = null; }
+    this._mirrorRings = [];
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Layer 7 — Resonance polish
+  // ─────────────────────────────────────────────────────────────────────────
+  _missFlash() {
+    this.cameras.main.shake(220, 0.006);
+    const ov = this.add.graphics().setDepth(20);
+    ov.fillStyle(0xFF1A1A, 1);
+    ov.fillRect(0, 0, this.W, this.H);
+    ov.setAlpha(0);
+    this.tweens.add({
+      targets: ov, alpha: { from: 0.22, to: 0 },
+      duration: 380, ease: 'Sine.easeOut',
+      onComplete: () => ov.destroy(),
+    });
+  }
+
+  _startResonanceWarning() {
+    if (this._warnTween) this._warnTween.stop();
+    this._warnTween = this.tweens.add({
+      targets: this._resGfx,
+      alpha: { from: 1, to: 0.22 },
+      duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  End states
+  // ─────────────────────────────────────────────────────────────────────────
   _handleLevelClear() {
+    this._stopMirrorVisuals();
     this.audio.stop();
     this.audio.clearArpeggio();
+
     const txt = this.add.text(this.W / 2, this.H / 2, 'Ascend.', {
-      fontFamily: 'Georgia, serif',
-      fontSize:   '36px',
-      color:      '#C9A84C',
+      fontFamily: 'Georgia, serif', fontSize: '36px', color: '#C9A84C',
     }).setOrigin(0.5).setDepth(20).setAlpha(0);
 
     this.tweens.add({ targets: txt, alpha: 1, duration: 1500, ease: 'Sine.easeIn' });
@@ -462,14 +545,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   _gameOver() {
+    this._stopMirrorVisuals();
     this.audio.stop();
     this.audio.gameOverTone();
     this.ball.reset(this.W / 2, this.ballRestY);
 
     const txt = this.add.text(this.W / 2, this.H / 2, 'Return.', {
-      fontFamily: 'Georgia, serif',
-      fontSize:   '36px',
-      color:      '#F0ECD8',
+      fontFamily: 'Georgia, serif', fontSize: '36px', color: '#F0ECD8',
     }).setOrigin(0.5).setDepth(20).setAlpha(0);
 
     this.tweens.add({ targets: txt, alpha: 1, duration: 1500, ease: 'Sine.easeIn' });
