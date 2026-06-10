@@ -1,10 +1,11 @@
-import { Cfg }         from '../config.js';
-import { Ball }        from '../objects/Ball.js';
-import { Paddle }      from '../objects/Paddle.js';
-import { Bricks }      from '../objects/Bricks.js';
-import { AudioEngine } from '../audio/AudioEngine.js';
-import { Trail }       from '../vfx/Trail.js';
-import { Particles }   from '../vfx/Particles.js';
+import { Cfg }           from '../config.js';
+import { Ball }          from '../objects/Ball.js';
+import { Paddle }        from '../objects/Paddle.js';
+import { Bricks }        from '../objects/Bricks.js';
+import { AudioEngine }   from '../audio/AudioEngine.js';
+import { Trail }         from '../vfx/Trail.js';
+import { Particles }     from '../vfx/Particles.js';
+import { InfinityMirror } from '../vfx/InfinityMirror.js';
 
 const MB = () => Phaser.Physics.Matter.Matter.Body;
 
@@ -34,6 +35,8 @@ export class GameScene extends Phaser.Scene {
     this._mirrorTimer       = null;
     this._mirrorRingPhase   = 0;
     this._warnTween         = null;
+
+    this.infinityMirror = new InfinityMirror(this);
 
     this._buildBackground();
     this._buildWalls();
@@ -244,6 +247,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p) => {
       lastX = p.x;
       this.audio.unlock();
+      this.infinityMirror.requestPermission();
       if (!this.ball.launched) this._launchBall();
     });
 
@@ -419,6 +423,7 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────────────
   update() {
     this._reflectedThisStep = false;
+    this.infinityMirror.update();
 
     // Mandala rotation — 4× faster during Mirror State
     const rotMult = this._mirrorActive ? 4 : 1;
