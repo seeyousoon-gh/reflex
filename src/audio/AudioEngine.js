@@ -1,27 +1,23 @@
-// Gymnopédie No. 1 (Satie) — D major: D E F# G A B C#
-//
-// Opening melody phrase (D4–E5 range) — shared melody cursor advances through
-// this on every brick hit; ring controls octave and timbre, not pitch.
-//
-//  E5      D5      E5      B4      A4      A4      D5      C#5
-//  B4      A4      G4      F#4     E4      D4      E4      F#4
-const GYMNOPEDIE_MELODY = [
-  659.25, 587.33, 659.25, 493.88, 440.00, 440.00, 587.33, 554.37,
-  493.88, 440.00, 392.00, 369.99, 329.63, 293.66, 329.63, 369.99,
+// Ode to Joy (Beethoven) — D major
+// D4  D4  E4  F#4  F#4 E4  D4  C#4
+// B3  B3  C#4 D4   D4  C#4 C#4 D4
+const ODE_MELODY = [
+  293.66, 293.66, 329.63, 369.99, 369.99, 329.63, 293.66, 277.18,
+  246.94, 246.94, 277.18, 293.66, 293.66, 277.18, 277.18, 293.66,
 ];
 
-// Arpeggio stem — mid-register Gymnopédie fragment
-// Base (8):  E4   D4   B3   A3   D4   C#4  B3   A3
-const GYMNOPEDIE_ARP = [
-  329.63, 293.66, 246.94, 220.00,
-  293.66, 277.18, 246.94, 220.00,
+// Arpeggio stem — D major triads, mid-register
+// Base (8):  D3  F#3 A3  D4  A2  C#3 E3  A3
+const ODE_ARP = [
+  146.83, 185.00, 220.00, 293.66,
+  110.00, 138.59, 164.81, 220.00,
 ];
-// Bloom (16): adds ascending second half
-const GYMNOPEDIE_ARP_BLOOM = [
-  329.63, 293.66, 246.94, 220.00,
-  293.66, 277.18, 246.94, 220.00,
-  329.63, 369.99, 392.00, 440.00,
-  493.88, 440.00, 392.00, 369.99,
+// Bloom (16): adds ascending upper phrase
+const ODE_ARP_BLOOM = [
+  146.83, 185.00, 220.00, 293.66,
+  110.00, 138.59, 164.81, 220.00,
+  246.94, 293.66, 329.63, 369.99,
+  440.00, 369.99, 329.63, 293.66,
 ];
 
 // Per-ring voice config. octave: 0=normal, -1=×0.5 (down), -2=×0.25 (two down)
@@ -157,7 +153,7 @@ export class AudioEngine {
     const t = this._nextNoteAt;
     this._nextNoteAt += this._quantum;
 
-    const baseFreq = GYMNOPEDIE_MELODY[this._melodyCursor % GYMNOPEDIE_MELODY.length];
+    const baseFreq = ODE_MELODY[this._melodyCursor % ODE_MELODY.length];
     this._melodyCursor++;
 
     const cfg  = RING_CFG[ringIdx] ?? RING_CFG[1];
@@ -226,7 +222,7 @@ export class AudioEngine {
 
   _scheduleArp() {
     const ctx   = this._ctx;
-    const notes = this._stemLevel >= 3 ? GYMNOPEDIE_ARP_BLOOM : GYMNOPEDIE_ARP;
+    const notes = this._stemLevel >= 3 ? ODE_ARP_BLOOM : ODE_ARP;
     while (this._arpNext < ctx.currentTime + 0.3) {
       // Long attack (60 ms) + decay that overlaps the next note → notes blend like a held pedal
       this._tone(notes[this._arpIdx % notes.length], 'sine', 0.055, this._arpNext, 1.1, 0.06);
