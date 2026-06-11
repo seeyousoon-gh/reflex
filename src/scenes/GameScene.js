@@ -244,10 +244,19 @@ export class GameScene extends Phaser.Scene {
   _setupInput() {
     let lastX = 0;
 
+    // iOS 13+: request gyro permission from the first native touchstart on the
+    // canvas — the only event context iOS accepts. passive:true lets Phaser also
+    // process the same touch without interference.
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      this.game.canvas.addEventListener('touchstart', () => {
+        this.infinityMirror.requestGyroPermission();
+      }, { once: true, passive: true });
+    }
+
     this.input.on('pointerdown', (p) => {
       lastX = p.x;
       this.audio.unlock();
-      this.infinityMirror.requestPermission();
       if (!this.ball.launched) this._launchBall();
     });
 

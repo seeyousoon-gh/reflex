@@ -19,7 +19,6 @@ export class InfinityMirror {
   _setupGyro() {
     this._baseGamma = null;
     this._baseBeta  = null;
-    this._permBtn   = null;
 
     this._handler = ({ gamma, beta }) => {
       if (this._baseGamma === null) {
@@ -34,56 +33,23 @@ export class InfinityMirror {
 
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      this._showPermButton();
+      // iOS 13+: listener added after requestGyroPermission() is called
+      // from a native touchstart event in GameScene._setupInput()
     } else {
       window.addEventListener('deviceorientation', this._handler, true);
     }
   }
 
-  _showPermButton() {
-    const btn = document.createElement('button');
-    btn.textContent = 'Allow Motion';
-    Object.assign(btn.style, {
-      position:         'fixed',
-      bottom:           '52px',
-      left:             '50%',
-      transform:        'translateX(-50%)',
-      background:       'rgba(10, 6, 20, 0.72)',
-      color:            '#C9A84C',
-      border:           '1px solid rgba(201,168,76,0.45)',
-      borderRadius:     '22px',
-      padding:          '9px 28px',
-      fontFamily:       'Georgia, serif',
-      fontSize:         '13px',
-      letterSpacing:    '0.06em',
-      cursor:           'pointer',
-      zIndex:           '99999',
-      webkitBackdropFilter: 'blur(6px)',
-      backdropFilter:   'blur(6px)',
-      touchAction:      'manipulation',
-    });
-
-    const grant = () => {
-      DeviceOrientationEvent.requestPermission()
-        .then(s => {
-          if (s === 'granted') {
-            window.addEventListener('deviceorientation', this._handler, true);
-          }
-          btn.remove();
-          this._permBtn = null;
-        })
-        .catch(() => { btn.remove(); this._permBtn = null; });
-    };
-
-    // touchend fires after touchstart — avoids click-delay and keeps gesture context
-    btn.addEventListener('touchend', () => grant(), { once: true });
-    btn.addEventListener('click',    grant, { once: true });
-
-    document.body.appendChild(btn);
-    this._permBtn = btn;
+  // Called from a native touchstart handler — satisfies iOS user-gesture requirement.
+  requestGyroPermission() {
+    if (typeof DeviceOrientationEvent === 'undefined' ||
+        typeof DeviceOrientationEvent.requestPermission !== 'function') return;
+    DeviceOrientationEvent.requestPermission()
+      .then(s => {
+        if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
+      })
+      .catch(() => {});
   }
-
-  requestPermission() {} // no-op: handled by native DOM button
 
   update() {
     const gfx = this._gfx;
@@ -163,7 +129,6 @@ export class InfinityMirror {
 
   _destroy() {
     window.removeEventListener('deviceorientation', this._handler, true);
-    if (this._permBtn) { this._permBtn.remove(); this._permBtn = null; }
     this._gfx.destroy();
   }
 }
