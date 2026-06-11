@@ -33,22 +33,32 @@ export class InfinityMirror {
       this._gy += (ty - this._gy) * SMOOTH;
     };
 
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+: requestPermission() must be called from a touchend event on a
-      // real UI element. We attach to the game canvas itself — same first tap
-      // that launches the ball — without any DOM overlay or preventDefault.
-      this._gyroUnlock = () => {
-        DeviceOrientationEvent.requestPermission()
-          .then(s => {
-            if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
-          })
-          .catch(() => {});
-      };
-      this._canvas.addEventListener('touchend', this._gyroUnlock, { once: true });
-    } else {
+    if (typeof DeviceOrientationEvent === 'undefined' ||
+        typeof DeviceOrientationEvent.requestPermission !== 'function') {
+      // Non-iOS: events fire without permission
       window.addEventListener('deviceorientation', this._handler, true);
+      return;
     }
+
+    // iOS 13+: try an eager call first — if permission is already cached in
+    // this Safari session it resolves 'granted' with no dialog and no gesture.
+    DeviceOrientationEvent.requestPermission()
+      .then(s => {
+        if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
+      })
+      .catch(() => {
+        // No cached permission — must come from a user gesture (touchend).
+        // The first tap that launches the ball also fires touchend on the canvas,
+        // which satisfies iOS's requirement with zero extra interaction.
+        this._gyroUnlock = () => {
+          DeviceOrientationEvent.requestPermission()
+            .then(s => {
+              if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
+            })
+            .catch(() => {});
+        };
+        this._canvas.addEventListener('touchend', this._gyroUnlock, { once: true });
+      });
   }
 
   update() {
