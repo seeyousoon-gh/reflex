@@ -19,6 +19,7 @@ export class InfinityMirror {
   _setupGyro() {
     this._baseGamma = null;
     this._baseBeta  = null;
+    this._permBtn   = null;
 
     this._handler = ({ gamma, beta }) => {
       if (this._baseGamma === null) {
@@ -33,26 +34,56 @@ export class InfinityMirror {
 
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+: permission must be called synchronously inside a native DOM
-      // gesture. Phaser's pointerdown fires too late — hook the raw touchstart
-      // with capture so we get it before any framework processing.
-      const ask = () => {
-        DeviceOrientationEvent.requestPermission()
-          .then(s => {
-            if (s === 'granted') {
-              window.addEventListener('deviceorientation', this._handler, true);
-            }
-          })
-          .catch(() => {});
-      };
-      document.addEventListener('touchstart', ask, { once: true, capture: true });
+      this._showPermButton();
     } else {
       window.addEventListener('deviceorientation', this._handler, true);
     }
   }
 
-  // No-op: permission is now handled automatically via native touchstart
-  requestPermission() {}
+  _showPermButton() {
+    const btn = document.createElement('button');
+    btn.textContent = 'Allow Motion';
+    Object.assign(btn.style, {
+      position:         'fixed',
+      bottom:           '52px',
+      left:             '50%',
+      transform:        'translateX(-50%)',
+      background:       'rgba(10, 6, 20, 0.72)',
+      color:            '#C9A84C',
+      border:           '1px solid rgba(201,168,76,0.45)',
+      borderRadius:     '22px',
+      padding:          '9px 28px',
+      fontFamily:       'Georgia, serif',
+      fontSize:         '13px',
+      letterSpacing:    '0.06em',
+      cursor:           'pointer',
+      zIndex:           '99999',
+      webkitBackdropFilter: 'blur(6px)',
+      backdropFilter:   'blur(6px)',
+      touchAction:      'manipulation',
+    });
+
+    const grant = () => {
+      DeviceOrientationEvent.requestPermission()
+        .then(s => {
+          if (s === 'granted') {
+            window.addEventListener('deviceorientation', this._handler, true);
+          }
+          btn.remove();
+          this._permBtn = null;
+        })
+        .catch(() => { btn.remove(); this._permBtn = null; });
+    };
+
+    // touchend fires after touchstart — avoids click-delay and keeps gesture context
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); grant(); }, { once: true });
+    btn.addEventListener('click',    grant, { once: true });
+
+    document.body.appendChild(btn);
+    this._permBtn = btn;
+  }
+
+  requestPermission() {} // no-op: handled by native DOM button
 
   update() {
     const gfx = this._gfx;
@@ -132,6 +163,7 @@ export class InfinityMirror {
 
   _destroy() {
     window.removeEventListener('deviceorientation', this._handler, true);
+    if (this._permBtn) { this._permBtn.remove(); this._permBtn = null; }
     this._gfx.destroy();
   }
 }
