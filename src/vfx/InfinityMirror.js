@@ -7,11 +7,12 @@ const SMOOTH    = 0.09;    // gyro lerp per frame
 
 export class InfinityMirror {
   constructor(scene) {
-    this.W    = scene.scale.width;
-    this.H    = scene.scale.height;
-    this._gfx = scene.add.graphics().setDepth(-1);
-    this._gx  = 0;   // smoothed left/right tilt
-    this._gy  = 0;   // smoothed forward/back tilt
+    this.W       = scene.scale.width;
+    this.H       = scene.scale.height;
+    this._canvas = scene.game.canvas;
+    this._gfx    = scene.add.graphics().setDepth(-1);
+    this._gx     = 0;   // smoothed left/right tilt
+    this._gy     = 0;   // smoothed forward/back tilt
     this._setupGyro();
     scene.events.once('shutdown', () => this._destroy());
   }
@@ -34,9 +35,9 @@ export class InfinityMirror {
 
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+: requestPermission() must be called from a touchend event.
-      // Capture it at the document level so no DOM overlay is needed.
-      // capture:true fires before Phaser; no preventDefault keeps Phaser intact.
+      // iOS 13+: requestPermission() must be called from a touchend event on a
+      // real UI element. We attach to the game canvas itself — same first tap
+      // that launches the ball — without any DOM overlay or preventDefault.
       this._gyroUnlock = () => {
         DeviceOrientationEvent.requestPermission()
           .then(s => {
@@ -44,7 +45,7 @@ export class InfinityMirror {
           })
           .catch(() => {});
       };
-      document.addEventListener('touchend', this._gyroUnlock, { once: true, capture: true });
+      this._canvas.addEventListener('touchend', this._gyroUnlock, { once: true });
     } else {
       window.addEventListener('deviceorientation', this._handler, true);
     }
@@ -129,7 +130,7 @@ export class InfinityMirror {
   _destroy() {
     window.removeEventListener('deviceorientation', this._handler, true);
     if (this._gyroUnlock) {
-      document.removeEventListener('touchend', this._gyroUnlock, true);
+      this._canvas.removeEventListener('touchend', this._gyroUnlock);
       this._gyroUnlock = null;
     }
     this._gfx.destroy();
