@@ -51,6 +51,7 @@ export class Bricks {
       body._waveType  = 'sine';
       body._color     = Cfg.ivory;
       body._isBeat    = beats.has(i);
+      body._stepIndex = i;   // direct 1:1 to 16 sequencer steps
       this.remaining++;
     }
   }
@@ -83,6 +84,7 @@ export class Bricks {
       body._waveType  = waveType;
       body._color     = color;
       body._isBeat    = beats.has(i);
+      body._stepIndex = Math.round(i * 16 / count) % 16;  // map to 16 steps
       this.remaining++;
     }
   }

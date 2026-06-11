@@ -295,16 +295,17 @@ export class GameScene extends Phaser.Scene {
     const vel = this.ball.body.velocity;
     let vx = vel.x, vy = vel.y;
     let px = this.ball.x, py = this.ball.y;
-    let hit = false;
+    let side = null;
 
-    if (py - r <= 0 && vy < 0)      { vy = Math.abs(vy);  py = r + 1;          hit = true; }
-    if (px - r <= 0 && vx < 0)      { vx = Math.abs(vx);  px = r + 1;          hit = true; }
-    if (px + r >= this.W && vx > 0) { vx = -Math.abs(vx); px = this.W - r - 1; hit = true; }
+    if (py - r <= 0 && vy < 0)      { vy = Math.abs(vy);  py = r + 1;          side = 'top'; }
+    if (px - r <= 0 && vx < 0)      { vx = Math.abs(vx);  px = r + 1;          side = side || 'left'; }
+    if (px + r >= this.W && vx > 0) { vx = -Math.abs(vx); px = this.W - r - 1; side = side || 'right'; }
 
-    if (hit) {
+    if (side) {
       MB().setPosition(this.ball.body, { x: px, y: py });
       MB().setVelocity(this.ball.body, { x: vx, y: vy });
       this.ball.jitter(1);
+      this.audio.wallHit(side);
     }
   }
 
@@ -390,6 +391,7 @@ export class GameScene extends Phaser.Scene {
     this.vfx.spawnBurst(bx, by, color);
     this.vfx.spawnRing(bx, by, ringColor);
     this.audio.brickNote(brickBody._waveType, brickBody._ringIndex);
+    this.audio.activateStep(brickBody._ringIndex, brickBody._stepIndex);
     if (brickBody._isBeat) this.audio.chordStab();
     this._arcFlashAt = this.time.now;
     if (!this._reflectedThisStep) {
@@ -469,9 +471,10 @@ export class GameScene extends Phaser.Scene {
     this._resolveWalls();
     this.ball.normalizeSpeed(this.targetPPS / 60);
 
-    // Couple arpeggio tempo to ball speed — faster play = faster pulse
-    const arpInterval = Phaser.Math.Clamp(0.95 - this.targetPPS / 1400, 0.40, 0.90);
-    this.audio.setArpTempo(arpInterval);
+    // Couple sequencer BPM to ball speed (90 BPM at launch → 150 BPM at max)
+    const bpm = Math.round(90 + (this.targetPPS - Cfg.speedAwakening) /
+                (Cfg.speedDeepening - Cfg.speedAwakening) * 60);
+    this.audio.setBPM(bpm);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

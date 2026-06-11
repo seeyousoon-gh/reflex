@@ -1,287 +1,345 @@
-// Ode to Joy (Beethoven) — D major
-// D4  D4  E4  F#4  F#4 E4  D4  C#4
-// B3  B3  C#4 D4   D4  C#4 C#4 D4
+// Ode to Joy melody — D major, played through on every brick hit (ring sets octave)
 const ODE_MELODY = [
   293.66, 293.66, 329.63, 369.99, 369.99, 329.63, 293.66, 277.18,
   246.94, 246.94, 277.18, 293.66, 293.66, 277.18, 277.18, 293.66,
 ];
 
-// Arpeggio stem — D major triads, mid-register
-// Base (8):  D3  F#3 A3  D4  A2  C#3 E3  A3
-const ODE_ARP = [
-  146.83, 185.00, 220.00, 293.66,
-  110.00, 138.59, 164.81, 220.00,
-];
-// Bloom (16): adds ascending upper phrase
-const ODE_ARP_BLOOM = [
-  146.83, 185.00, 220.00, 293.66,
-  110.00, 138.59, 164.81, 220.00,
-  246.94, 293.66, 329.63, 369.99,
-  440.00, 369.99, 329.63, 293.66,
-];
-
-// Per-ring voice config. octave: 0=normal, -1=×0.5 (down), -2=×0.25 (two down)
+// Per-ring lead voice: triangle wave for PS1 synth texture
 const RING_CFG = [
-  { vol: 0.40, dur: 1.2, octave:  0 },  // 0: melody ring — soprano
-  { vol: 0.25, dur: 1.0, octave:  0 },  // 1: outer — soprano, softer
-  { vol: 0.20, dur: 1.4, octave: -1 },  // 2: middle — alto/tenor
-  { vol: 0.16, dur: 2.0, octave: -2 },  // 3: inner — bass
+  { vol: 0.32, dur: 0.9, octave:  0 },  // 0: melody ring — soprano
+  { vol: 0.20, dur: 0.8, octave:  0 },  // 1: outer
+  { vol: 0.16, dur: 1.1, octave: -1 },  // 2: middle — alto
+  { vol: 0.12, dur: 1.6, octave: -2 },  // 3: inner — bass
 ];
 
-// Drone pairs: each pitch gets two oscillators 0.12 Hz apart.
-// Raised to D3/A3 (was D2/A2) — mid-register is warmer, less oppressive.
-// Dmaj: D3(146.83) + A3(220.00)  |  Gmaj: G3(196.00) + D4(293.66)
-const DMAJ_BASES    = [[146.83, 0.055], [220.00, 0.035]];
-const GMAJ_BASES    = [[196.00, 0.055], [293.66, 0.035]];
-const DETUNE_OFFSET = 0.12;  // Hz — subtle ~8 s acoustic breath
+// Sawtooth rolling bassline — one note per sequencer step (D major)
+// D2  D2  D2  E2   D2  A1  F#2 D2   A1  D2  D2  G2   D2  E2  A1  D2
+const BASS_NOTES = [
+  73.42, 73.42, 73.42, 82.41,
+  73.42, 55.00, 92.50, 73.42,
+  55.00, 73.42, 73.42, 98.00,
+  73.42, 82.41, 55.00, 73.42,
+];
 
 export class AudioEngine {
   constructor() {
-    this._ctx            = new (window.AudioContext || window.webkitAudioContext)();
-    this._drone          = [];     // {osc, gain, baseFreq, detuneOffset, baseVol}
-    this._shimmer        = [];     // high overtone pair — fades in over 20-30 s
-    this._stemLevel      = 0;
-    this._mirror         = false;
-    this._arpTimer       = null;
-    this._arpNext        = 0;
-    this._arpIdx         = 0;
-    this._baseInterval   = 0.75;
-    this._arpInterval    = 0.75;
-    this._melodyCursor   = 0;
-    this._transportStart = 0;
-    this._quantum        = 0.125;
-    this._nextNoteAt     = 0;
-    this._chordPhase     = 0;      // 0=Dmaj7 1=Gmaj7
-    this._chordTimer     = null;
+    this._ctx          = new (window.AudioContext || window.webkitAudioContext)();
+    this._bpm          = 120;
+    this._step         = 0;
+    this._nextStepAt   = 0;
+    this._clockTimer   = null;
+    this._melodyCursor = 0;
+    this._stemLevel    = 0;
+    this._mirror       = false;
+    this._pad          = null;
+    this._noiseBuf     = null;
+
+    // 16-step sequencer — kick seeded on beats 0 and 8 (minimal DnB two-step)
+    this._seq = {
+      kick:  this._makeSeq([0, 8]),
+      snare: this._makeSeq([]),
+      hihat: this._makeSeq([]),
+      ohat:  this._makeSeq([]),
+      bass:  this._makeSeq([]),
+    };
   }
+
+  _makeSeq(seeds) {
+    return Array.from({ length: 16 }, (_, i) => seeds.includes(i));
+  }
+
+  get _stepLen() { return 60 / this._bpm / 4; }   // 16th-note duration in seconds
 
   unlock() {
     if (this._ctx.state === 'suspended') this._ctx.resume();
   }
 
   startAmbient() {
-    if (this._drone.length) return;
+    if (this._clockTimer) return;
     const ctx = this._ctx;
-    this._transportStart = ctx.currentTime;
-    this._nextNoteAt     = ctx.currentTime;
-
-    DMAJ_BASES.forEach(([base, vol]) => {
-      [0, DETUNE_OFFSET].forEach(offset => {
-        const osc  = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.value = base + offset;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + 5.0);
-        osc.start();
-        this._drone.push({ osc, gain, baseFreq: base, detuneOffset: offset, baseVol: vol });
-      });
-    });
-
-    // Shimmer: A4 + E5 — barely-audible high overtones, very slow fade-in
-    [[440.00, 0.010, 22], [659.25, 0.007, 34]].forEach(([freq, vol, rise]) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + rise);
-      osc.start();
-      this._shimmer.push({ osc, gain });
-    });
-
-    this._startChordCycle();
+    this._nextStepAt = ctx.currentTime + 0.1;
+    this._tick();
+    this._startPad();
   }
+
+  _startPad() {
+    const ctx = this._ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 146.83;  // D3 — warm, unobtrusive foundation
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.038, ctx.currentTime + 9);
+    osc.start();
+    this._pad = { osc, gain, baseVol: 0.038 };
+  }
+
+  // ── Sequencer clock (lookahead scheduler) ──────────────────────────────────
+
+  _tick() {
+    const ctx = this._ctx;
+    while (this._nextStepAt < ctx.currentTime + 0.10) {
+      this._schedStep(this._step, this._nextStepAt);
+      this._step = (this._step + 1) % 16;
+      this._nextStepAt += this._stepLen;
+    }
+    this._clockTimer = setTimeout(() => this._tick(), 25);
+  }
+
+  _schedStep(step, t) {
+    if (this._seq.kick[step])  this._kick(t);
+    if (this._seq.snare[step]) this._snare(t);
+    if (this._seq.hihat[step]) this._hihat(t, false);
+    if (this._seq.ohat[step])  this._hihat(t, true);
+    if (this._seq.bass[step])  this._bassNote(t, BASS_NOTES[step], this._stepLen * 0.88);
+  }
+
+  // ── Game → sequencer wiring ────────────────────────────────────────────────
+
+  setBPM(bpm) {
+    this._bpm = Math.max(90, Math.min(155, Math.round(bpm)));
+  }
+
+  // Brick destruction permanently activates that brick's step in its track
+  activateStep(ringIdx, stepIdx) {
+    const map = ['hihat', 'kick', 'bass', 'ohat'];
+    const track = map[ringIdx];
+    if (!track) return;
+    this._seq[track][stepIdx] = true;
+    // Outer ring also seeds snare on beat positions 4 and 12
+    if (ringIdx === 1 && (stepIdx === 4 || stepIdx === 12)) {
+      this._seq.snare[stepIdx] = true;
+    }
+  }
+
+  // Wall bounce → immediate one-shot percussion
+  wallHit(side) {
+    const t = this._ctx.currentTime + 0.005;
+    if (side === 'top')        this._rimshot(t);
+    else if (side === 'left')  this._hihat(t, false);
+    else                       this._hihat(t, true);
+  }
+
+  // ── Stem unlocks ───────────────────────────────────────────────────────────
 
   unlockStem(level) {
     if (level <= this._stemLevel) return;
     this._stemLevel = level;
     const ctx = this._ctx;
-    if (level === 1) {
-      // Recognition: gentle harmonic layer — no rhythm pulse, just a soft overtone swell
-      this._drone.forEach(d => {
-        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.3, ctx.currentTime + 4.0);
-      });
+    if (level === 1 && this._pad) {
+      this._pad.gain.gain.linearRampToValueAtTime(this._pad.baseVol * 1.5, ctx.currentTime + 3);
     } else if (level === 2) {
-      this._arpNext = ctx.currentTime + 1.0;
-      this._scheduleArp();
-    } else if (level === 3) {
-      this._drone.forEach(d => {
-        d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.6, ctx.currentTime + 4.0);
-      });
+      // Auto-seed snare backbeat at beat positions 4 and 12
+      this._seq.snare[4]  = true;
+      this._seq.snare[12] = true;
+    } else if (level === 3 && this._pad) {
+      this._pad.gain.gain.linearRampToValueAtTime(this._pad.baseVol * 2.0, ctx.currentTime + 3);
     }
   }
 
   startMirror() {
-    this._mirror      = true;
-    this._arpInterval = this._baseInterval * 0.5;
-    const ctx = this._ctx;
-    this._drone.forEach(d => {
-      d.osc.frequency.linearRampToValueAtTime(
-        (d.baseFreq + d.detuneOffset) * 2, ctx.currentTime + 1.0,
+    this._mirror = true;
+    // Add rolling 8th-note hi-hats — the player earned this pattern
+    for (let i = 0; i < 16; i += 2) this._seq.hihat[i] = true;
+    if (this._pad) {
+      this._pad.gain.gain.linearRampToValueAtTime(
+        this._pad.baseVol * 2.4, this._ctx.currentTime + 1.0,
       );
-      d.gain.gain.linearRampToValueAtTime(d.baseVol * 1.9, ctx.currentTime + 1.0);
-    });
+    }
   }
 
   endMirror() {
-    this._mirror      = false;
-    this._arpInterval = this._baseInterval;
-    const ctx   = this._ctx;
-    const bright = this._stemLevel >= 3 ? 1.6 : this._stemLevel >= 1 ? 1.3 : 1.0;
-    this._drone.forEach(d => {
-      d.osc.frequency.linearRampToValueAtTime(d.baseFreq + d.detuneOffset, ctx.currentTime + 2.0);
-      d.gain.gain.linearRampToValueAtTime(d.baseVol * bright, ctx.currentTime + 2.0);
-    });
+    this._mirror = false;
+    // Hi-hat pattern and pad level remain — they were earned through play
   }
 
   stop() {
-    clearTimeout(this._arpTimer);
-    clearTimeout(this._chordTimer);
-    this._arpTimer = this._chordTimer = null;
+    if (this._clockTimer) { clearTimeout(this._clockTimer); this._clockTimer = null; }
     const ctx = this._ctx;
-    this._drone.forEach(d => {
-      d.gain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.5);
-      d.osc.stop(ctx.currentTime + 1.6);
-    });
-    this._shimmer.forEach(d => {
-      d.gain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.5);
-      d.osc.stop(ctx.currentTime + 1.6);
-    });
-    this._drone        = [];
-    this._shimmer      = [];
+    if (this._pad) {
+      this._pad.gain.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 1.2);
+      this._pad.osc.stop(ctx.currentTime + 1.3);
+      this._pad = null;
+    }
+    this._step         = 0;
+    this._melodyCursor = 0;
     this._stemLevel    = 0;
     this._mirror       = false;
-    this._melodyCursor = 0;
-    this._chordPhase   = 0;
+    this._seq = {
+      kick:  this._makeSeq([0, 8]),
+      snare: this._makeSeq([]),
+      hihat: this._makeSeq([]),
+      ohat:  this._makeSeq([]),
+      bass:  this._makeSeq([]),
+    };
   }
 
-  // ── Per-event sounds ────────────────────────────────────────────────────────
+  // ── Per-event sounds ───────────────────────────────────────────────────────
 
-  brickNote(waveType = 'sine', ringIdx = 1) {
-    const ctx = this._get();
-    const now = ctx.currentTime;
-
-    const gridSlot   = this._nextQuantum(now);
-    this._nextNoteAt = Math.max(this._nextNoteAt, gridSlot);
-    if (this._nextNoteAt - now > 0.5) return;
-    const t = this._nextNoteAt;
-    this._nextNoteAt += this._quantum;
-
-    const baseFreq = ODE_MELODY[this._melodyCursor % ODE_MELODY.length];
-    this._melodyCursor++;
-
+  brickNote(waveType = 'triangle', ringIdx = 1) {
+    const ctx  = this._get();
     const cfg  = RING_CFG[ringIdx] ?? RING_CFG[1];
-    const freq = baseFreq * (2 ** cfg.octave);
-
-    this._tone(freq, waveType, cfg.vol, t, cfg.dur);
-    if (ringIdx <= 1) this._tone(freq * 2, waveType, cfg.vol * 0.08, t, cfg.dur * 0.5);
+    const freq = ODE_MELODY[this._melodyCursor % ODE_MELODY.length] * (2 ** cfg.octave);
+    this._melodyCursor++;
+    this._tone(freq, 'triangle', cfg.vol, ctx.currentTime + 0.005, cfg.dur, 0.008);
   }
 
   paddleTick() {
-    const ctx  = this._get();
-    const freq = this._chordPhase === 0 ? 293.66 : 392.00;
-    this._tone(freq, 'sine', 0.04, ctx.currentTime, 0.07);
+    this._kick(this._ctx.currentTime + 0.005);
   }
 
-  // Beat-trigger brick: simultaneous chord stab on current harmonic phase
   chordStab() {
-    const ctx   = this._get();
-    const now   = ctx.currentTime;
-    const notes = this._chordPhase === 0
-      ? [293.66, 369.99, 440.00]   // D4 F#4 A4  (Dmaj)
-      : [392.00, 493.88, 587.33];  // G4 B4  D5  (Gmaj)
-    notes.forEach((f, i) => {
-      this._tone(f, 'sine', 0.09, now + i * 0.012, 0.40);
+    const ctx = this._get();
+    const now = ctx.currentTime;
+    [293.66, 369.99, 440.00].forEach((f, i) => {
+      this._tone(f, 'triangle', 0.08, now + i * 0.012, 0.38);
     });
-  }
-
-  // Coupled to ball speed — call every frame; mirror state applies half-speed on top
-  setArpTempo(baseInterval) {
-    this._baseInterval = baseInterval;
-    this._arpInterval  = baseInterval * (this._mirror ? 0.5 : 1.0);
   }
 
   corePing() {
     const ctx = this._get();
     const now = ctx.currentTime;
-    this._tone(73.42,  'sine', 0.35, now, 2.5);
-    this._tone(146.83, 'sine', 0.12, now, 1.5);
+    this._tone(146.83, 'triangle', 0.30, now, 2.0);
+    this._tone(293.66, 'sine',     0.10, now, 1.2);
   }
 
   missTone() {
-    const ctx  = this._get();
-    const now  = ctx.currentTime;
-    const [hi, lo] = this._chordPhase === 0
-      ? [293.66, 220.00]
-      : [392.00, 293.66];
-    this._tone(hi, 'sine', 0.18, now,        0.35);
-    this._tone(lo, 'sine', 0.10, now + 0.15, 0.50);
+    const ctx = this._get();
+    const now = ctx.currentTime;
+    this._tone(220.00, 'sine', 0.16, now,        0.30);
+    this._tone(164.81, 'sine', 0.08, now + 0.15, 0.45);
   }
 
   clearArpeggio() {
     const ctx = this._get();
     [293.66, 369.99, 440.00, 587.33, 880.00].forEach((f, i) => {
-      this._tone(f, 'sine', 0.28, ctx.currentTime + i * 0.12, 0.9);
+      this._tone(f, 'triangle', 0.22, ctx.currentTime + i * 0.10, 0.8);
     });
   }
 
   gameOverTone() {
     const ctx = this._get();
     const now = ctx.currentTime;
-    this._tone(146.83, 'sine', 0.28, now,       3.0);
-    this._tone(110.00, 'sine', 0.14, now + 0.2, 2.5);
+    this._tone(146.83, 'sine', 0.25, now,       2.8);
+    this._tone(110.00, 'sine', 0.12, now + 0.2, 2.2);
   }
 
-  // ── Arpeggio — sine with overlapping decay for pad-like blend ──────────────
+  // Legacy stub — BPM is now driven by setBPM() from ball speed
+  setArpTempo() {}
 
-  _scheduleArp() {
+  // ── PS1 percussion synthesis ───────────────────────────────────────────────
+
+  _kick(t) {
+    const ctx  = this._ctx;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(78, t);
+    osc.frequency.exponentialRampToValueAtTime(22, t + 0.075);
+    gain.gain.setValueAtTime(0.88, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.20);
+    osc.start(t);
+    osc.stop(t + 0.22);
+  }
+
+  _snare(t) {
+    const ctx  = this._ctx;
+    const buf  = this._getNoise();
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    noise.start(t, Math.random() * 0.5);
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.value = 2200;
+    filt.Q.value = 0.9;
+    const ng = ctx.createGain();
+    noise.connect(filt);
+    filt.connect(ng);
+    ng.connect(ctx.destination);
+    ng.gain.setValueAtTime(0.40, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    noise.stop(t + 0.15);
+
+    const osc = ctx.createOscillator();
+    const og  = ctx.createGain();
+    osc.connect(og);
+    og.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.value = 185;
+    og.gain.setValueAtTime(0.22, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
+  _hihat(t, open = false) {
     const ctx   = this._ctx;
-    const notes = this._stemLevel >= 3 ? ODE_ARP_BLOOM : ODE_ARP;
-    while (this._arpNext < ctx.currentTime + 0.3) {
-      // Long attack (60 ms) + decay that overlaps the next note → notes blend like a held pedal
-      this._tone(notes[this._arpIdx % notes.length], 'sine', 0.038, this._arpNext, 1.4, 0.09);
-      this._arpIdx++;
-      this._arpNext += this._arpInterval;
+    const buf   = this._getNoise();
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    noise.start(t, Math.random() * 0.5);
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'highpass';
+    filt.frequency.value = 8500;
+    const gain = ctx.createGain();
+    noise.connect(filt);
+    filt.connect(gain);
+    gain.connect(ctx.destination);
+    const dur = open ? 0.11 : 0.032;
+    gain.gain.setValueAtTime(0.20, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    noise.stop(t + dur + 0.01);
+  }
+
+  _rimshot(t) {
+    const ctx  = this._ctx;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.value = 750;
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
+    osc.start(t);
+    osc.stop(t + 0.05);
+  }
+
+  _bassNote(t, freq, dur) {
+    const ctx  = this._ctx;
+    const osc  = ctx.createOscillator();
+    const filt = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.connect(filt);
+    filt.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    filt.type = 'lowpass';
+    filt.frequency.value = 520;
+    filt.Q.value = 3.5;
+    gain.gain.setValueAtTime(0.30, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.start(t);
+    osc.stop(t + dur + 0.01);
+  }
+
+  // ── Internals ──────────────────────────────────────────────────────────────
+
+  _getNoise() {
+    if (!this._noiseBuf) {
+      const ctx = this._ctx;
+      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d   = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this._noiseBuf = buf;
     }
-    this._arpTimer = setTimeout(() => this._scheduleArp(), 100);
-  }
-
-  // ── Chord cycle — G↔D every 24 seconds, drone glides over 4 s ─────────────
-
-  _startChordCycle() {
-    const advance = () => {
-      this._chordPhase = (this._chordPhase + 1) % 2;
-      this._morphDrone();
-      this._chordTimer = setTimeout(advance, 24000);
-    };
-    this._chordTimer = setTimeout(advance, 24000);
-  }
-
-  _morphDrone() {
-    const bases  = this._chordPhase === 0 ? DMAJ_BASES : GMAJ_BASES;
-    const bright = (this._stemLevel >= 3 ? 1.6 : this._stemLevel >= 1 ? 1.3 : 1.0)
-                 * (this._mirror ? 1.9 : 1.0);
-    const ctx    = this._ctx;
-    this._drone.forEach((d, i) => {
-      const [newBase, newVol] = bases[Math.floor(i / 2)];
-      d.osc.frequency.linearRampToValueAtTime(newBase + d.detuneOffset, ctx.currentTime + 4.0);
-      d.gain.gain.linearRampToValueAtTime(newVol * bright, ctx.currentTime + 4.0);
-      d.baseFreq = newBase;
-      d.baseVol  = newVol;
-    });
-  }
-
-  // ── Internals ───────────────────────────────────────────────────────────────
-
-  _nextQuantum(fromTime) {
-    const Q   = this._quantum;
-    const pos = (fromTime - this._transportStart) / Q;
-    return this._transportStart + Math.ceil(pos + 0.01) * Q;
+    return this._noiseBuf;
   }
 
   _get() {
@@ -289,8 +347,7 @@ export class AudioEngine {
     return this._ctx;
   }
 
-  // attack defaults to 12 ms; pass a longer value for smooth pad-style fades.
-  _tone(freq, type, vol, startTime, dur, attack = 0.012) {
+  _tone(freq, type, vol, t, dur, attack = 0.010) {
     const ctx  = this._ctx;
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -298,10 +355,10 @@ export class AudioEngine {
     gain.connect(ctx.destination);
     osc.type = type;
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(vol, startTime + attack);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + dur);
-    osc.start(startTime);
-    osc.stop(startTime + dur + 0.05);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
   }
 }
