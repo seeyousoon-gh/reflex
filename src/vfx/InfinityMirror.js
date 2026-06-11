@@ -76,7 +76,7 @@ export class InfinityMirror {
     };
 
     // touchend fires after touchstart — avoids click-delay and keeps gesture context
-    btn.addEventListener('touchend', (e) => { e.preventDefault(); grant(); }, { once: true });
+    btn.addEventListener('touchend', () => grant(), { once: true });
     btn.addEventListener('click',    grant, { once: true });
 
     document.body.appendChild(btn);
