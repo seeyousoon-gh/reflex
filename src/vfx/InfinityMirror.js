@@ -17,8 +17,9 @@ export class InfinityMirror {
   }
 
   _setupGyro() {
-    this._baseGamma = null;
-    this._baseBeta  = null;
+    this._baseGamma  = null;
+    this._baseBeta   = null;
+    this._gyroUnlock = null;
 
     this._handler = ({ gamma, beta }) => {
       if (this._baseGamma === null) {
@@ -33,22 +34,20 @@ export class InfinityMirror {
 
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS 13+: listener added after requestGyroPermission() is called
-      // from a native touchstart event in GameScene._setupInput()
+      // iOS 13+: requestPermission() must be called from a touchend event.
+      // Capture it at the document level so no DOM overlay is needed.
+      // capture:true fires before Phaser; no preventDefault keeps Phaser intact.
+      this._gyroUnlock = () => {
+        DeviceOrientationEvent.requestPermission()
+          .then(s => {
+            if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
+          })
+          .catch(() => {});
+      };
+      document.addEventListener('touchend', this._gyroUnlock, { once: true, capture: true });
     } else {
       window.addEventListener('deviceorientation', this._handler, true);
     }
-  }
-
-  // Called from a native touchstart handler — satisfies iOS user-gesture requirement.
-  requestGyroPermission() {
-    if (typeof DeviceOrientationEvent === 'undefined' ||
-        typeof DeviceOrientationEvent.requestPermission !== 'function') return;
-    DeviceOrientationEvent.requestPermission()
-      .then(s => {
-        if (s === 'granted') window.addEventListener('deviceorientation', this._handler, true);
-      })
-      .catch(() => {});
   }
 
   update() {
@@ -129,6 +128,10 @@ export class InfinityMirror {
 
   _destroy() {
     window.removeEventListener('deviceorientation', this._handler, true);
+    if (this._gyroUnlock) {
+      document.removeEventListener('touchend', this._gyroUnlock, true);
+      this._gyroUnlock = null;
+    }
     this._gfx.destroy();
   }
 }
