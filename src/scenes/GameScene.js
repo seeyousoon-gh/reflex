@@ -470,9 +470,9 @@ export class GameScene extends Phaser.Scene {
     this._resolveWalls();
     this.ball.normalizeSpeed(this.targetPPS / 60);
 
-    // Couple sequencer BPM to ball speed (90 BPM at launch → 150 BPM at max)
-    const bpm = Math.round(90 + (this.targetPPS - Cfg.speedAwakening) /
-                (Cfg.speedDeepening - Cfg.speedAwakening) * 60);
+    // BPM tracks ball speed: 95 at launch → 125 at max depth
+    const bpm = Math.round(95 + (this.targetPPS - Cfg.speedAwakening) /
+                (Cfg.speedDeepening - Cfg.speedAwakening) * 30);
     this.audio.setBPM(bpm);
   }
 
