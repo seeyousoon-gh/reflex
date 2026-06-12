@@ -115,10 +115,11 @@ export class AudioEngine {
   }
 
   wallHit(side) {
-    const t = this._ctx.currentTime + 0.005;
-    if (side === 'top')       this._rimshot(t);
-    else if (side === 'left') this._hihat(t, false);
-    else                      this._hihat(t, true);
+    const t   = this._ctx.currentTime + 0.005;
+    // Pitched tones in F# minor — musical, spatially distinct
+    if (side === 'top')       this._wallTone(t, 554.37, 0.10);  // C#5 — bright ceiling ping
+    else if (side === 'left') this._wallTone(t, 220.00, 0.13);  // A3  — low left wall
+    else                      this._wallTone(t, 329.63, 0.12);  // E4  — mid right wall
   }
 
   // ── Stem unlocks ───────────────────────────────────────────────────────────
@@ -178,7 +179,8 @@ export class AudioEngine {
   brickNote(waveType = 'triangle', ringIdx = 1) {
     const ctx  = this._get();
     const cfg  = RING_CFG[ringIdx] ?? RING_CFG[1];
-    const freq = ODE_MELODY[this._melodyCursor % ODE_MELODY.length] * (2 ** cfg.octave);
+    // Always same octave regardless of ring — melody advances sequentially
+    const freq = ODE_MELODY[this._melodyCursor % ODE_MELODY.length];
     this._melodyCursor++;
     this._tone(freq, 'triangle', cfg.vol, ctx.currentTime + 0.005, cfg.dur, 0.008);
   }
@@ -295,18 +297,18 @@ export class AudioEngine {
     noise.stop(t + dur + 0.01);
   }
 
-  _rimshot(t) {
+  _wallTone(t, freq, dur) {
     const ctx  = this._ctx;
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.type = 'square';
-    osc.frequency.value = 680;
-    gain.gain.setValueAtTime(0.14, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.040);
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.16, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.start(t);
-    osc.stop(t + 0.055);
+    osc.stop(t + dur + 0.01);
   }
 
   // Deep sub-bass: triangle fundamental + pure sine sub-octave
